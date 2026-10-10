@@ -1608,5 +1608,15 @@
       "exit": 1,
       "stderr_contains": "E220 NOT_CONSTANT"
     }
+  },
+  {
+    "source": "i64-f32-round.tin",
+    "issue": 732,
+    "expected": {
+      "phase": "run",
+      "exit": 0,
+      "stdout": "4845873199587524608 4845873199587524608\n14069245236442300416 4895412794951729152\n",
+      "stderr": ""
+    }
   }
 ]
