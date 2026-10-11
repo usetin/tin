@@ -1274,6 +1274,41 @@ fn op_cost(e i64) i64 {
 	return 0
 }
 
+// A wide immediate that needs multiple 16-bit pieces is cheaper to keep in a
+// loop-weighted local than to rebuild on every trip around the loop.
+fn imm_materialize_cost(e i64) i64 {
+	if cast(Node, e).kind != EX_INT {
+		return 0
+	}
+	let v = cast(IntLit, e).val
+	mut zeros = 0
+	mut ones = 0
+	mut s = 0
+	for s < 64 {
+		let part = (v >> s) & 0xffff
+		if part == 0 {
+			zeros = zeros + 1
+		}
+		if part == 0xffff {
+			ones = ones + 1
+		}
+		s = s + 16
+	}
+	mut fill = 0
+	if ones > zeros {
+		fill = 0xffff
+	}
+	mut cost = 0
+	s = 0
+	for s < 64 {
+		if ((v >> s) & 0xffff) != fill {
+			cost = cost + 1
+		}
+		s = s + 16
+	}
+	return cost
+}
+
 fn hoist_stmts(stmts []i64) {
 	mut i = 0
 	for i < len(stmts) {
@@ -1323,6 +1358,10 @@ fn hoist_expr(e i64) {
 		return
 	}
 	mut k = cast(Node, e).kind
+	if k == EX_INT && imm_materialize_cost(e) >= 2 {
+		replace_with_temp(e)
+		return
+	}
 	if (k == EX_BINARY || k == EX_UNARY || k == EX_CONV || k == EX_FLOAT || (k == EX_INDEX && cast(IndexExpr, e).hdr != 0) || (k == EX_MEM && cast(MemExpr, e).hdr != 0)) && invariant(e) != 0 && is_const(e) == 0 && op_cost(e) >= 2 {
 		replace_with_temp(e)
 		return

@@ -311,13 +311,12 @@ From the assembly analysis of the benchmarks:
   [Single-byte string appends](#single-byte-string-appends)); signed `/10` and `%10` use
   multiply-high on x64, while the arm64 backend and other divisors still use hardware
   division.
-- **Constant materialization:** 64-bit constants are rebuilt with movz/movk inside
-  loops.
+- **Constant materialization:** loop-invariant 64-bit constants that need multiple
+  immediate instructions are materialized before the loop and kept in a weighted local.
 
 Planned codegen work in order of payoff: a register allocator with loop-depth spill
 weights, range analysis for masked and modular indexes, generalized division by
-constants via multiply-high, hoisting constant materialization, and alias information
-for struct fields.
+constants via multiply-high, and alias information for struct fields.
 
 ## 3b. Math functions (gauge)
 

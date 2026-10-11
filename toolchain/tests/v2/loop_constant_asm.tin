@@ -1,0 +1,17 @@
+package main
+
+fn masked(n i64) i64 {
+	mut i = 0
+	mut hits = 0
+	for i < n {
+		if (i & 0x123456789abcdef0) == 0x123456789abcdef0 {
+			hits += 1
+		}
+		i += 1
+	}
+	return hits
+}
+
+fn main() {
+	masked(100)
+}
