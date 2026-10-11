@@ -89,7 +89,8 @@ on core.start {
 		bench.Configure(deps())
 		if hearth.ID() == 0 {
 			detach {
-				mut hs = workers.Handlers(workers.NewDeps(pg, store(), arg(3), 16))
+				mut wd = workers.NewDeps(pg, store(), arg(3), 16)
+				mut hs = workers.Handlers(mut wd)
 				hs = append(hs, bench.Handlers(deps())...)
 				let r = events.Runner{Db: pg, Handlers: hs, Lease: 30 * tide.Second, Poll: 100 * tide.Millisecond}
 				r.Loop(0)

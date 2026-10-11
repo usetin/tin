@@ -1646,5 +1646,42 @@
       "stdout": "[0 0 0 1]\n[0 0 0 1 4 2]\n[0 0 0 1 4 5]\n",
       "stderr": ""
     }
+  },
+  {
+    "source": "closure-param-alias-bad.tin",
+    "issue": 1060,
+    "expected": {
+      "phase": "compile",
+      "exit": 1,
+      "stderr_contains": "E701 NOT_MUT: cannot modify parameter 'x': declare it mut"
+    }
+  },
+  {
+    "source": "nested-arena-param-alias-bad.tin",
+    "issue": 1060,
+    "expected": {
+      "phase": "compile",
+      "exit": 1,
+      "stderr_contains": "E701 NOT_MUT: cannot modify parameter 'x': declare it mut"
+    }
+  },
+  {
+    "source": "closure-param-store-bad.tin",
+    "issue": 1060,
+    "expected": {
+      "phase": "compile",
+      "exit": 1,
+      "stderr_contains": "E312 ARG_ESCAPE: set stores request memory into its mut parameter 'x'"
+    }
+  },
+  {
+    "source": "closure-param-alias.tin",
+    "issue": 1060,
+    "expected": {
+      "phase": "run",
+      "exit": 0,
+      "stdout": "5\n6\n7\n",
+      "stderr": ""
+    }
   }
 ]

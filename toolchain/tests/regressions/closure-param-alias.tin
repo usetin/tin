@@ -1,0 +1,51 @@
+package main
+
+// #1060: a closure's own parameters and the parameters its captured variables alias are told
+// apart. Before, a store into a mut copy of the outer mut parameter x was read as a store into
+// the closure's parameter t (a false E701), and a store from the closure did not reach x's
+// summary.
+
+import "say"
+
+type S struct {
+	n i64
+}
+
+fn each(v []S, g fn(S)) {
+	for t in v {
+		g(t)
+	}
+}
+
+fn sum(x mut S, ks []S) {
+	mut a = x
+	each(ks, fn(t S) {
+		a.n += t.n
+	})
+}
+
+fn local(x S) i64 {
+	mut a = S{n: 1}
+	let g = fn(t S) {
+		a.n = a.n + t.n
+	}
+	g(x)
+	return a.n
+}
+
+fn set(x mut S) {
+	mut a = x
+	let g = fn() {
+		a.n = 7
+	}
+	g()
+}
+
+fn main() {
+	mut s = S{n: 0}
+	sum(mut s, []S{S{n: 2}, S{n: 3}})
+	say.Line(s.n)
+	say.Line(local(s))
+	set(mut s)
+	say.Line(s.n)
+}

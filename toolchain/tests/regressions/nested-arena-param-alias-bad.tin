@@ -1,0 +1,25 @@
+package main
+
+// #1060: an arena inside an arena reads its captured variables as unknown, which lost the
+// parameter they alias; a store through one is E701 like the same store outside the blocks.
+
+import "say"
+
+type S struct {
+	n i64
+}
+
+fn f(x S) {
+	mut a = x
+	arena {
+		arena {
+			a.n = 9
+		}
+	}
+}
+
+fn main() {
+	let s = S{n: 0}
+	f(s)
+	say.Line(s.n)
+}

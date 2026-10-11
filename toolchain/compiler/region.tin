@@ -303,9 +303,15 @@ fn rg_same(a i64, b i64) i64 {
 	return 0
 }
 
-fn rg_result(i i64, bits i64) {
+fn rg_result(i i64, bits_in i64) {
 	if i >= 8 {
 		return
+	}
+	mut bits = bits_in
+	if cast(Fn, rg_fn).parent != 0 && rg_is_bound_fn(cast(Fn, rg_fn)) == 0 && (bits >> (8 + rg_pbase(cast(Fn, rg_fn)))) != 0 {
+		// A closure's result names only its own parameters to callers, who pass those: what came
+		// in through a captured variable is the parent's object, unknown to them (#1060).
+		bits = (bits & ((RG_P0 << rg_pbase(cast(Fn, rg_fn))) - 1)) | RG_EMB | RG_UNK
 	}
 	if (rg_sum[2 + i] | bits) != rg_sum[2 + i] {
 		rg_sum[2 + i] = rg_sum[2 + i] | bits
@@ -528,24 +534,23 @@ fn rg_record(recs []i64, i i64, o i64, t i64) {
 }
 
 fn rg_param_name(i i64) str {
-	let pf = rg_param_fn()
-	return pf.locals[i].name
+	return rg_bit_fn(i).locals[rg_bit_param(i)].name
 }
 
 // rg_store checks a store of a value with bits v and type t into a container with bits c,
 // an object of type ct held by an object of type co (see rg_record).
 fn rg_store(c i64, co i64, ct i64, v i64, t i64, pos i64, gname str) {
-	let pf = rg_param_fn()
-	let psum = pf.regsum
 	mut i = 0
-	for i < len(pf.params) && i < RG_MAXP {
-		if (c & (RG_P0 << i)) != 0 {
-			if rg_report != 0 && pf.muts[i] == 0 && (rg_modrep & (1 << i)) == 0 {
+	for i < RG_MAXP && (c >> 8) != 0 {
+		let pi = rg_bit_param(i)
+		if (c & (RG_P0 << i)) != 0 && pi >= 0 {
+			let pf = rg_bit_fn(i)
+			if rg_report != 0 && pf.muts[pi] == 0 && (rg_modrep & (1 << i)) == 0 {
 				rg_modrep = rg_modrep | (1 << i)
 				err_code_quoted(pos, "E701 NOT_MUT", "cannot modify parameter ", rg_param_name(i), ": declare it mut")
 			}
-			if psum != 0 {
-				rg_record(cast([]i64, psum[11]), i, co, ct)
+			if pf.regsum != 0 {
+				rg_record(cast([]i64, pf.regsum[11]), pi, co, ct)
 			}
 		}
 		i = i + 1
@@ -574,13 +579,15 @@ fn rg_store(c i64, co i64, ct i64, v i64, t i64, pos i64, gname str) {
 		}
 	}
 	i = 0
-	for i < len(pf.params) && i < RG_MAXP {
-		if (c & (RG_P0 << i)) != 0 && psum != 0 {
-			if (psum[0] & (1 << i)) == 0 {
-				psum[0] = psum[0] | (1 << i)
+	for i < RG_MAXP && (c >> 8) != 0 {
+		let pi = rg_bit_param(i)
+		if (c & (RG_P0 << i)) != 0 && pi >= 0 && rg_bit_fn(i).regsum != 0 {
+			let psum = rg_bit_fn(i).regsum
+			if (psum[0] & (1 << pi)) == 0 {
+				psum[0] = psum[0] | (1 << pi)
 				rg_changed = 1
 			}
-			rg_record(cast([]i64, psum[10]), i, co, ct)
+			rg_record(cast([]i64, psum[10]), pi, co, ct)
 		}
 		i = i + 1
 	}
@@ -706,17 +713,74 @@ shared mut rg_cell_note i64 = -1 // the captured variable of a closure that may 
 fn rg_cell_bits(i i64) i64 {
 	if cast(Fn, rg_fn).escapes != 0 {
 		rg_cell_note = i
-		return RG_UNK | RG_EMB
+		return RG_UNK | RG_EMB | rg_cell_params(cast(Fn, rg_fn), i)
 	}
 	let os = cast(Fn, rg_fn).captures[i]
 	if cast(i64, os) == 0 || os.captured != 0 {
-		return RG_UNK | RG_EMB
+		return RG_UNK | RG_EMB | rg_cell_params(cast(Fn, rg_fn), i)
 	}
 	if rg_is_arena(rg_fn) != 0 {
 		// Made outside the arena: what it holds is not the arena's fresh memory.
-		return ((os.region | os.capbits) & ~RG_FRESH) | RG_OUT
+		return (rg_shift_in(cast(Fn, rg_fn), os.region | os.capbits) & ~RG_FRESH) | RG_OUT
 	}
-	return os.region | os.capbits
+	return rg_shift_in(cast(Fn, rg_fn), os.region | os.capbits)
+}
+
+// rg_shift_in turns bits b of closure f's parent into f's terms: the parent's parameter bits
+// move above f's own parameters (rg_pbase), so the two never mix (#1060).
+fn rg_shift_in(f Fn, b i64) i64 {
+	let n = rg_pbase(f)
+	mut out = b & 0xff
+	mut i = 0
+	for i < RG_MAXP && (b >> 8) != 0 {
+		if (b & (RG_P0 << i)) != 0 {
+			if i + n < RG_MAXP {
+				out = out | (RG_P0 << (i + n))
+			} else {
+				out = out | RG_UNK | RG_EMB
+			}
+		}
+		i = i + 1
+	}
+	return out
+}
+
+// rg_shift_out is the reverse, for bits closure f stores into its parent's variable: its own
+// parameters mean nothing to the parent, which sees an object it did not get (unknown origin).
+fn rg_shift_out(f Fn, b i64) i64 {
+	let n = rg_pbase(f)
+	mut out = b & 0xff
+	mut i = 0
+	for i < RG_MAXP && (b >> 8) != 0 {
+		if (b & (RG_P0 << i)) != 0 {
+			if i >= n {
+				out = out | (RG_P0 << (i - n))
+			} else {
+				out = out | RG_UNK | RG_EMB
+			}
+		}
+		i = i + 1
+	}
+	return out
+}
+
+// rg_cell_params is the parameter bits, in f's terms, of what f's captured variable i may hold
+// when its bits are otherwise unknown (a closure that may be kept, a capture of a capture): a
+// store through it still modifies those parameters (#1060).
+fn rg_cell_params(f Fn, i i64) i64 {
+	let os = f.captures[i]
+	if cast(i64, os) == 0 || f.parent == 0 {
+		return 0
+	}
+	if os.captured != 0 {
+		return rg_shift_in(f, rg_cell_params(cast(Fn, f.parent), os.cap_idx)) & ~0xff
+	}
+	mut b = os.region | os.capbits
+	if cast(i64, rg_kept_bits) != 0 {
+		// A variable a closure that may be kept captures: its cell's stores (rg_note_kept).
+		b = b | rg_lookup(rg_kept_bits, cast(i64, os))
+	}
+	return rg_shift_in(f, b) & ~0xff
 }
 
 // rg_cell_store checks an assignment of bits v to captured variable i. In a frame-local closure
@@ -739,6 +803,7 @@ fn rg_cell_store(i i64, v_in i64, t i64, pos i64) {
 		return
 	}
 	let os = cast(Fn, rg_fn).captures[i]
+	v = rg_shift_out(cast(Fn, rg_fn), v)
 	if cast(i64, os) != 0 && os.captured == 0 && (os.capbits | v) != os.capbits {
 		os.capbits = os.capbits | v
 		rg_changed = 1
@@ -1027,6 +1092,40 @@ fn rg_is_bound_fn(f Fn) i64 {
 	return i64(rg_is_arena(cast(i64, f)) != 0 || (len(f.params) == 1 && f.params[0] == "$r"))
 }
 
+// rg_pbase is how many parameter bits closure f keeps for its own parameters; the bits above
+// name its parent's (rg_shift_in). A boundary block's closure keeps none: its $r holds no bits.
+fn rg_pbase(f Fn) i64 {
+	if rg_is_bound_fn(f) != 0 {
+		return 0
+	}
+	return len(f.params)
+}
+
+// rg_bit_fn and rg_bit_param are the function whose parameter the running function's parameter
+// bit k (RG_P0 << k) names, and that parameter's index there (-1: none) (#1060).
+fn rg_bit_fn(k_in i64) Fn {
+	mut k = k_in
+	mut f = cast(Fn, rg_fn)
+	for k >= rg_pbase(f) && f.parent != 0 {
+		k = k - rg_pbase(f)
+		f = cast(Fn, f.parent)
+	}
+	return f
+}
+
+fn rg_bit_param(k_in i64) i64 {
+	mut k = k_in
+	mut f = cast(Fn, rg_fn)
+	for k >= rg_pbase(f) && f.parent != 0 {
+		k = k - rg_pbase(f)
+		f = cast(Fn, f.parent)
+	}
+	if k >= len(f.params) || k >= len(f.muts) {
+		return -1
+	}
+	return k
+}
+
 // rg_arena_made reports whether a value with bits v may be memory made in the arena.
 fn rg_arena_made(v i64) i64 {
 	return i64((v & RG_FRESH) != 0 || ((v & RG_EMB) != 0 && (v & RG_OUT) == 0))
@@ -1060,14 +1159,13 @@ fn rg_grow(b i64, pos i64) {
 	if (b & (RG_INGOT | RG_UNK)) != 0 {
 		rg_keeps()
 	}
-	let pf = rg_param_fn()
 	mut i = 0
-	for i < len(pf.params) && i < RG_MAXP {
-		if (b & (RG_P0 << i)) != 0 {
+	for i < RG_MAXP && (b >> 8) != 0 {
+		if (b & (RG_P0 << i)) != 0 && rg_bit_param(i) >= 0 {
 			if cast(i64, rg_grows) == 0 {
 				rg_grows = []i64{}
 			}
-			if rg_merge(rg_grows, cast(i64, pf), 1 << i) != 0 {
+			if rg_merge(rg_grows, cast(i64, rg_bit_fn(i)), 1 << rg_bit_param(i)) != 0 {
 				rg_changed = 1
 			}
 		}
@@ -1081,27 +1179,28 @@ fn rg_grow(b i64, pos i64) {
 // rg_arena_store notes a store of bits v into a container with bits c: in terms of the running
 // function's parameters, for its callers, and as E315 when it takes arena memory outside.
 fn rg_arena_store(c i64, v i64, pos i64) {
-	let pf = rg_param_fn()
 	mut i = 0
-	for i < len(pf.params) && i < RG_MAXP && i < 62 {
-		if (c & (RG_P0 << i)) != 0 {
+	for i < RG_MAXP && (c >> 8) != 0 {
+		let pi = rg_bit_param(i)
+		if (c & (RG_P0 << i)) != 0 && pi >= 0 {
+			let pf = rg_bit_fn(i)
 			if (v & RG_FRESH) != 0 {
 				if cast(i64, rg_fstores) == 0 {
 					rg_fstores = []i64{}
 				}
-				if rg_merge(rg_fstores, cast(i64, pf), 1 << i) != 0 {
+				if rg_merge(rg_fstores, cast(i64, pf), 1 << pi) != 0 {
 					rg_changed = 1
 				}
 			}
 			mut j = 0
 			mut from = 0
-			for j < len(pf.params) && j < RG_MAXP && j < 62 {
-				if (v & (RG_P0 << j)) != 0 {
-					from = from | (1 << j)
+			for j < RG_MAXP && (v >> 8) != 0 {
+				if (v & (RG_P0 << j)) != 0 && rg_bit_param(j) >= 0 && cast(i64, rg_bit_fn(j)) == cast(i64, pf) {
+					from = from | (1 << rg_bit_param(j))
 				}
 				j = j + 1
 			}
-			if from != 0 && rg_pstore_add(i, from) != 0 {
+			if from != 0 && rg_pstore_add(cast(i64, pf), pi, from) != 0 {
 				rg_changed = 1
 			}
 		}
@@ -1112,8 +1211,7 @@ fn rg_arena_store(c i64, v i64, pos i64) {
 	}
 }
 
-fn rg_pstore_add(i i64, from i64) i64 {
-	let f = cast(i64, rg_param_fn())
+fn rg_pstore_add(f i64, i i64, from i64) i64 {
 	if cast(i64, rg_pstores) == 0 {
 		rg_pstores = []i64{}
 	}
