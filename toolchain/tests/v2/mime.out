@@ -12,7 +12,7 @@ qp café suite =
  a
 b
  =zz trailing
-qp bad ok =4 quotedprintable: invalid bytes after the soft break quotedprintable: invalid unescaped byte 0x01 in body
+qp bad ok =4 quotedprintable: invalid bytes after =: "" quotedprintable: invalid unescaped byte 0x01 in body
 qp enc 68656c6c6f20776f726c640d0a 747261696c696e673d32300d0a 3d334478
 qp enc long 206 123
 multipart parts  [name||value] [f|a.txt|café]

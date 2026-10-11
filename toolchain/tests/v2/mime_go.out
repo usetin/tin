@@ -31,3 +31,16 @@ header "=?utf-8?q?a?"
 encode =?utf-8?q?caf=C3=A9_caf=C3=A9_caf=C3=A9_caf=C3=A9_caf=C3=A9_caf=C3=A9_caf?= =?utf-8?q?=C3=A9_caf=C3=A9_caf=C3=A9_caf=C3=A9_caf=C3=A9_caf=C3=A9_caf?= =?utf-8?q?=C3=A9_caf=C3=A9_caf=C3=A9_caf=C3=A9_?=
 encode =?UTF-8?b?Y2Fmw6kgY2Fmw6kgY2Fmw6kgY2Fmw6kgY2Fmw6kgY2Fmw6kgY2Fmw6kgY2Fm?= =?UTF-8?b?w6kgY2Fmw6kgY2Fmw6kgY2Fmw6kgY2Fmw6kgY2Fmw6kgY2Fmw6kgY2Fmw6kg?= =?UTF-8?b?Y2Fmw6kg?=
 encode "" "a\tb" "=?iso-8859-1?b?6XTp?="
+qp quotedprintable: invalid bytes after =: ""
+qp quotedprintable: invalid hex byte 0x0d
+qp "x= y\nz"
+qp quotedprintable: invalid unescaped byte 0x01 in body
+qp "ok"
+qp "ab=4"
+qp "=4\n"
+qp "caféx"
+qp enc "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy=\r\n=20\r\n"
+qp enc "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy=\r\n=09"
+qp enc "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy=\r\n=3D"
+qp enc "a\r\n=01b"
+qp enc "x=20\r\ny=09"

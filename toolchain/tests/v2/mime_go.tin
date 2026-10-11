@@ -2,10 +2,12 @@ package main
 
 // mime against Go 1.27's mime: RFC 2231 parameters and continuations, quoted strings with
 // backslashes, the media type faults, FormatMediaType's RFC 2231 and refusals, encoded words in
-// both encodings with Go's faults, DecodeHeader's kept words, and EncodeWord's splitting.
+// both encodings with Go's faults, DecodeHeader's kept words, EncodeWord's splitting, and quoted-printable's
+// faults and the soft breaks of its escapes at the end of a full line.
 // Every line of mime_go.out is what the same calls print in Go.
 
 import "mime"
+import "mime/quotedprintable"
 import "say"
 import "sift"
 import "twine"
@@ -35,6 +37,13 @@ fn word(v str) str {
 
 fn header(v str) str {
 	let s = mime.WordDecoder{}.DecodeHeader(v) catch e {
+		return say.Fmt("%v", e)
+	}
+	return say.Fmt("%q", s)
+}
+
+fn qp(v str) str {
+	let s = quotedprintable.Decode(v) catch e {
 		return say.Fmt("%v", e)
 	}
 	return say.Fmt("%q", s)
@@ -71,4 +80,11 @@ fn main() {
 	say.Line("encode", mime.QEncoding.EncodeWord("utf-8", long))
 	say.Line("encode", mime.BEncoding.EncodeWord("UTF-8", long))
 	say.Line(say.Fmt("encode %q %q %q", mime.QEncoding.EncodeWord("utf-8", ""), mime.QEncoding.EncodeWord("utf-8", "a\tb"), mime.BEncoding.EncodeWord("iso-8859-1", "\xe9t\xe9")))
+	for v in []str{"=", "a=\rb\n", "x= y\nz", "\x01=  z", "ok=\n", "ab=4", "=4\n", "caf=C3=A9=\r\nx"} {
+		say.Line("qp", qp(v))
+	}
+	let y = twine.Repeat("y", 74)
+	for v in []str{y + " \n", y + "\t", y + "=", "a\r\x01\nb", "x \r\ny\t"} {
+		say.Line("qp enc", say.Fmt("%q", quotedprintable.Encode(v)))
+	}
 }
