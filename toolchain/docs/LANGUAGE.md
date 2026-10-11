@@ -2061,7 +2061,8 @@ names (`{a:1 b:2.5}`). `%+d`, `%+g`, `%+f` and `%+e` do print the sign.
 
 A verb and its flags apply to every element of a slice, map or struct, as in Go: `%3d` of
 `[]i64{1, 20}` is `[  1  20]`. `%x`, `%X` and `%q` of a `[]u8` format its bytes as one string
-(`%x` of `[]u8{1, 255}` is `01ff`).
+(`%x` of `[]u8{1, 255}` is `01ff`). `%#v` of a `str` is its Go syntax (`"a"`), and of an
+unsigned integer too (`0xff`); a slice, map or struct does not have its Go syntax yet (#1251).
 
 Output to stdout is written at every newline, to a terminal, a pipe or a file alike, as Go's is
 (#747): `say.Line` and a format ending in `\n` reach a server's log collector before its response

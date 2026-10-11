@@ -1,7 +1,8 @@
 package main
 
 // say.Fmt applies a verb and its flags to every element of a slice, map or struct, and formats a
-// []u8 as a string of bytes under %q, %x and %X, as Go's fmt does. Every line is Go 1.27's output.
+// []u8 as a string of bytes under %q, %x and %X, as Go's fmt does; %#v of a str or an unsigned
+// integer is its Go syntax. Every line is Go 1.27's output.
 
 import "say"
 
@@ -39,6 +40,7 @@ fn main() {
 	mut mq = make(map[i64]i64)
 	mq[65] = 66
 	slices()
+	say.Line(say.Fmt("%#v|%#v|%#v|%#v|%#8v|%#.2v|%#v|%#v|%#v", "a\"b`", "", u8(255), u64(1) << 63, u32(7), "hello", i64(-5), true, 2.5))
 	say.Line(say.Fmt("%v|%+v|%6v|%-4v", t, t, t, t))
 	say.Line(say.Fmt("%v|%4v|%+v", ts, ts, ts))
 	say.Line(say.Fmt("%v|%3v|%x|%+v", mm, mm, mm, mm))

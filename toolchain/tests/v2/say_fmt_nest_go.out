@@ -6,6 +6,7 @@
 [true false]|[true false]|[  true  false]|[true   false ]|
 map[a:1 b:2]|map[    a:    1     b:    2]|map[a:1 b:2]
 [[1 2] [3]]|[[1 2] [3]]|[[  1   2] [  3]]|[[1 2] [3]]
+"a\"b`"|""|0xff|0x8000000000000000|     0x7|"he"|-5|true|2.5
 {7 hi 2.5 true {-3 z} [1 20] map[k:0.5]}|{a:7 b:hi f:2.5 ok:true in:{x:-3 s:z} l:[1 20] m:map[k:0.5]}|{     7     hi    2.5   true {    -3      z} [     1     20] map[     k:   0.5]}|{7    hi   2.5  true {-3   z   } [1    20  ] map[k   :0.5 ]}
 [{7 hi 2.5 true {-3 z} [1 20] map[k:0.5]} {7 hi 2.5 true {-3 z} [1 20] map[k:0.5]}]|[{   7   hi  2.5 true {  -3    z} [   1   20] map[   k: 0.5]} {   7   hi  2.5 true {  -3    z} [   1   20] map[   k: 0.5]}]|[{a:7 b:hi f:2.5 ok:true in:{x:-3 s:z} l:[1 20] m:map[k:0.5]} {a:7 b:hi f:2.5 ok:true in:{x:-3 s:z} l:[1 20] m:map[k:0.5]}]
 map[a:[1 2] b:[]]|map[  a:[  1   2]   b:[]]|map[61:[1 2] 62:[]]|map[a:[1 2] b:[]]

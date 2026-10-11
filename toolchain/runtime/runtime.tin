@@ -4171,6 +4171,10 @@ fn fmt_uint_buf(buf i64, v i64, base i64, upper bool) i64 {
 mut fmtUnsigned bool
 
 fn fmt_int(f i64, v i64, verb i64) {
+	if verb == 'v' && f[fSharp] != 0 && fmtUnsigned {
+		// Go's %#v of an unsigned integer is its Go syntax: hexadecimal with 0x.
+		verb = 'x'
+	}
 	let buf = fmt_frame_scratch(f, 160+f[fWidth]+f[fPrec])
 	if verb == 'c' {
 		let n = rt_utf8_put(buf, v)
@@ -4510,6 +4514,13 @@ fn rt_can_backquote(s str) bool {
 }
 
 fn fmt_string(f i64, s str, verb i64) {
+	if verb == 'v' && f[fSharp] != 0 {
+		// Go's %#v of a string is its Go syntax: double-quoted, never backquoted.
+		f[fSharp] = 0
+		fmt_string(f, s, 'q')
+		f[fSharp] = 1
+		return
+	}
 	if verb == 'q' {
 		// Go's %q: precision counts runes of the input; # backquotes when the string allows it,
 		// + escapes every non-ASCII rune; width pads the quoted text (#149).
