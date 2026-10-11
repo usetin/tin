@@ -669,16 +669,19 @@ fn x_signed_magic(op str, dst i64, l i64, c i64) {
 	}
 	let k = div_const_shift(d)
 	let (magic, shift) = div_magic(d, k)
-	x_mov(RAX, l)
+	// IMULH consumes RAX and overwrites it; keep the original operand across the
+	// multiply because it may itself live in RAX (the last-resort temp register).
+	x_mov(XSCR2, l)
+	x_mov(RAX, XSCR2)
 	x_load_imm(XSCR, magic)
 	emit1(X_IMULH, XSCR)
 	if magic < 0 {
-		x_binop(X_ADD, RDX, RDX, l, 1)
+		x_binop(X_ADD, RDX, RDX, XSCR2, 1)
 	}
 	if shift != 0 {
 		emit2(X_SARI, RDX, shift)
 	}
-	x_mov(XSCR, l)
+	x_mov(XSCR, XSCR2)
 	emit2(X_SARI, XSCR, 63)
 	emit2(X_SUB, RDX, XSCR)
 	if op == "/" {
@@ -692,41 +695,44 @@ fn x_signed_magic(op str, dst i64, l i64, c i64) {
 		if c < 0 {
 			emit1(X_NEG, RDX)
 		}
-		let q = XSCR2
 		if x64_fits32(c) != 0 {
-			emit3(X_IMUL_RRI, q, RDX, c)
+			emit3(X_IMUL_RRI, XSCR, RDX, c)
+			x_mov(dst, XSCR2)
 		} else {
-			x_load_imm(XSCR, c)
-			x_binop(X_IMUL_RR, q, RDX, XSCR, 1)
+			x_mov(RAX, XSCR2)
+			x_load_imm(XSCR2, c)
+			x_binop(X_IMUL_RR, XSCR, RDX, XSCR2, 1)
+			x_mov(dst, RAX)
 		}
-		x_mov(dst, l)
-		emit2(X_SUB, dst, q)
+		emit2(X_SUB, dst, XSCR)
 	}
 }
 
 fn x_unsigned_magic(op str, dst i64, l i64, c i64) {
 	let k = div_const_shift(c) + 1
 	let (magic, shift) = div_magic(c, k)
-	x_mov(RAX, l)
+	x_mov(XSCR2, l)
+	x_mov(RAX, XSCR2)
 	x_load_imm(XSCR, magic)
 	emit1(X_MULU, XSCR)
-	x_binop(X_AND, XSCR2, l, RDX, 1)
-	x_binop(X_XOR, RDX, l, RDX, 1)
+	x_binop(X_AND, XSCR, XSCR2, RDX, 1)
+	x_binop(X_XOR, RDX, XSCR2, RDX, 1)
 	emit2(X_SHRI, RDX, 1)
-	x_binop(X_ADD, RDX, XSCR2, RDX, 1)
+	x_binop(X_ADD, RDX, XSCR, RDX, 1)
 	if shift > 1 {
 		emit2(X_SHRI, RDX, shift - 1)
 	}
 	if op == "%" {
-		let q = XSCR2
 		if x64_fits32(c) != 0 {
-			emit3(X_IMUL_RRI, q, RDX, c)
+			emit3(X_IMUL_RRI, XSCR, RDX, c)
+			x_mov(dst, XSCR2)
 		} else {
-			x_load_imm(XSCR, c)
-			x_binop(X_IMUL_RR, q, RDX, XSCR, 1)
+			x_mov(RAX, XSCR2)
+			x_load_imm(XSCR2, c)
+			x_binop(X_IMUL_RR, XSCR, RDX, XSCR2, 1)
+			x_mov(dst, RAX)
 		}
-		x_mov(dst, l)
-		emit2(X_SUB, dst, q)
+		emit2(X_SUB, dst, XSCR)
 	} else {
 		x_mov(dst, RDX)
 	}
