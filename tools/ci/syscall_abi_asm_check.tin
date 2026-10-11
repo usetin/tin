@@ -41,6 +41,12 @@ fn main() {
 	ci.Must(assemble, "assemble " + source)
 	let dump = ci.Exec([]str{"objdump", "-d", ci.Join(work, "syscall.o")}, root, 10)
 	ci.Must(dump, "objdump syscall leaf object")
+	// The check pins GNU objdump's spelling: CI only runs it on Linux (runner.os == 'Linux'), and a
+	// Mac's LLVM objdump spells the same operands differently, so say so rather than fail confusingly.
+	if twine.Contains(dump.Stdout, "file format") && twine.Contains(dump.Stderr, "LLVM") {
+		ci.Fail("objdump is not GNU objdump: this check pins the GNU dialect, run it on Linux")
+		return
+	}
 	let directives = strict.ParseChecks(ci.Join(root, "tools/ci/syscall_abi_asm.check"), arch) catch err {
 		ci.Fail(say.Str(err))
 		return
