@@ -1,0 +1,81 @@
+package main
+
+// #1275: value structs past a few cache lines are copied by a loop over their words, then the
+// tail; every kind of copy keeps every byte and leaves the two values independent.
+
+import "say"
+
+type Big value struct {
+	a [60]i64
+	n i64
+}
+
+type Odd value struct {
+	w [100]i32
+	c u8
+}
+
+fn fill(k i64) Big {
+	mut b Big
+	for i in 0..60 {
+		b.a[i] = k * 1000 + i
+	}
+	b.n = k
+	return b
+}
+
+fn odd(k i32) Odd {
+	mut o Odd
+	for i in 0..100 {
+		o.w[i] = k + i32(i)
+	}
+	o.c = u8(k)
+	return o
+}
+
+fn sum(b Big) i64 {
+	mut s = b.n
+	for i in 0..60 {
+		s += b.a[i]
+	}
+	return s
+}
+
+fn osum(o Odd) i64 {
+	mut s = i64(o.c)
+	for i in 0..100 {
+		s += i64(o.w[i])
+	}
+	return s
+}
+
+fn pair(k i64) (Big, Odd) {
+	return fill(k), odd(i32(k))
+}
+
+// many lanes: the loops must leave every later result where it is
+fn many(k i64) (i64, Big, str, Odd, i64, Big, i64, i64) {
+	return k, fill(k), "s{k}", odd(i32(k)), k + 1, fill(k + 1), k + 2, k + 3
+}
+
+fn main() {
+	let p = fill(3)
+	mut q = p
+	q.a[59] = -1
+	say.Line(sum(p), sum(q), p.a[59], q.a[0])
+	mut xs = make([]Big, 2)
+	xs[1] = p
+	say.Line(sum(xs[1]), sum(xs[0]))
+	mut m = map[str]Odd{}
+	m["k"] = odd(7)
+	let o = m["k"]
+	say.Line(osum(o), o.c, o.w[99])
+	let (b, d) = pair(5)
+	say.Line(sum(b), osum(d), d.c)
+	let (a1, b1, s1, o1, a2, b2, a3, a4) = many(9)
+	say.Line(a1, sum(b1), s1, osum(o1), a2, sum(b2), a3, a4)
+	mut z Big
+	say.Line(sum(z))
+	z = p
+	say.Line(sum(z))
+}
