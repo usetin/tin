@@ -1,0 +1,48 @@
+package main
+
+// #1274: a reference struct whose never-nil fields lead back to itself can hold no value (each
+// needs one already made), and argo.Get's generator overflowed the compiler's stack walking it.
+
+import "argo"
+import "say"
+
+type In struct {
+	a T
+}
+
+type T struct {
+	p ?In
+	q In
+}
+
+type Self struct {
+	n    i64
+	next Self
+}
+
+type Cell value struct {
+	n   i64
+	box Box
+}
+
+type Box struct {
+	c Cell
+}
+
+// fine: an optional, a slice or a map on the way can be empty
+type Tree struct {
+	kids []Tree
+	up   ?Tree
+	by   map[str]Tree
+}
+
+fn show(text str, t mut T) {
+	argo.Get(text, mut t) catch err {
+		say.Line(err)
+	}
+}
+
+fn main() {
+	let t = Tree{kids: []Tree{}, up: nil, by: map[str]Tree{}}
+	say.Line(len(t.kids))
+}
