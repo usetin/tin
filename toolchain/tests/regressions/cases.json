@@ -1627,5 +1627,45 @@
       "stdout": "2\n5\n6\n6\n",
       "stderr": ""
     }
+  },
+  {
+    "source": "elem-home-x64-pool.tin",
+    "issue": 1173,
+    "platform": "linux",
+    "expected": {
+      "phase": "compile",
+      "exit": 0,
+      "stderr": ""
+    }
+  },
+  {
+    "source": "gauge-more-pool.tin",
+    "issue": 1173,
+    "platform": "linux",
+    "expected": {
+      "phase": "compile",
+      "exit": 0,
+      "stderr": ""
+    }
+  },
+  {
+    "source": "pair-scratch-call-pool.tin",
+    "issue": 1173,
+    "platform": "linux",
+    "expected": {
+      "phase": "compile",
+      "exit": 0,
+      "stderr": ""
+    }
+  },
+  {
+    "source": "x64-scratch-call-pool.tin",
+    "issue": 1173,
+    "platform": "linux",
+    "expected": {
+      "phase": "compile",
+      "exit": 0,
+      "stderr": ""
+    }
   }
 ]

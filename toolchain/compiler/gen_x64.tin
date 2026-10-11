@@ -1208,7 +1208,21 @@ fn x_gen_pair(lexp i64, rexp i64, d i64) {
 		// l was computed past the temp pool, into the scratch rax: x_gen_call saves only the pool, and the
 		// call's result comes back in rax too. Park l on the stack across the call (#811).
 		x_push(l)
-		x_gen_call(rexp, d2)
+		x_gen_call(rexp, d)
+		if rfp != 0 {
+			x_mov(XFSCR, XMM)
+			r = XFSCR
+		} else {
+			x_mov(XSCR, RAX)
+			r = XSCR
+		}
+		x_pop(l)
+	} else if is_real_call(rexp) != 0 && (room(d2, rfp) == 0 || room(d2, 1 - rfp) == 0) {
+		// The call's arguments may need the exhausted class at d2 (for example,
+		// an integer conversion inside a float expression). Keep l on the stack
+		// and evaluate the call from d, where its own live-temp save covers l's peers.
+		x_push(l)
+		x_gen_call(rexp, d)
 		if rfp != 0 {
 			x_mov(XFSCR, XMM)
 			r = XFSCR
@@ -1224,7 +1238,9 @@ fn x_gen_pair(lexp i64, rexp i64, d i64) {
 		} else {
 			r = RAX
 		}
-	} else if room(d2, rfp) == 0 {
+	} else if room(d2, rfp) == 0 || room(d2, 1 - rfp) == 0 {
+		// A conversion can evaluate its source in the other register class at d2.
+		// Stage l before that source reaches a pool whose depth has already run out.
 		x_push(l)
 		let rr = x_gen_val(rexp, d)
 		if rfp != 0 {
