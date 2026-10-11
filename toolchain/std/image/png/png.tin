@@ -5,6 +5,7 @@ package png
 
 import "image"
 import "image/color"
+import "say"
 import "squash"
 import "stamp"
 
@@ -41,7 +42,8 @@ fn Decode(data str) !dyn image.Image {
 		let body = data[at+8:at+8+n]
 		let want = be32(data, at+8+n)
 		if want != i64(stamp.Crc32(data[at+4:at+8+n])) {
-			fail "png: invalid checksum {name} {want} {stamp.Crc32(data[at+4:at+8+n])}"
+			// The chunk name is quoted: it is input, and may hold any byte.
+			fail say.Fault("png: invalid checksum %q %d %d", name, want, stamp.Crc32(data[at+4:at+8+n]))
 		}
 		if name == "IHDR" {
 			if n != 13 || width != 0 {
