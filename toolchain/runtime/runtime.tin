@@ -4068,6 +4068,10 @@ fn rt_fmt_next(f i64) i64 {
 // rt_fmt_arg starts one argument: the separator for Print/Println, or the next verb
 // for Printf. It returns the verb to use.
 fn rt_fmt_arg(f i64, isstr bool) i64 {
+	if f[fNest] != 0 && f[fMode] == 0 {
+		// As Go: every element of a slice, map or struct takes the operand's verb and flags.
+		return f[fVerb]
+	}
 	if f[fNest] != 0 {
 		f[fWidth] = 0
 		f[fPrec] = -1
@@ -5158,7 +5162,7 @@ fn rt_fmt_sli(s []i64) {
 fn rt_fmt_slb(s []u8) {
 	let f = rt_frame()
 	let verb = rt_fmt_arg(f, false)
-	if verb == 's' || verb == 'q' || verb == 'x' {
+	if verb == 's' || verb == 'q' || verb == 'x' || verb == 'X' {
 		fmt_string(f, rt_str_from_bytes(s), verb)
 		return
 	}
@@ -5206,10 +5210,11 @@ fn rt_fmt_slt(s []bool) {
 		if i > 0 {
 			fb_byte(f, ' ')
 		}
+		// Each element is padded to the width, as Go pads them.
 		if v {
-			fb_str(f, "true")
+			fmt_pad(f, cast(i64, "true")+8, 4)
 		} else {
-			fb_str(f, "false")
+			fmt_pad(f, cast(i64, "false")+8, 5)
 		}
 	}
 	fb_byte(f, ']')
@@ -5482,9 +5487,14 @@ fn rt_fmt_u(v i64) {
 fn rt_fmt_slint(s i64, width i64, signed i64) {
 	let f = rt_frame()
 	let verb = rt_fmt_arg(f, false)
-	fb_byte(f, '[')
 	let n = s[0]
 	let d = s[2]
+	if width == 1 && signed == 0 && (verb == 's' || verb == 'q' || verb == 'x' || verb == 'X') {
+		// Go formats a []u8 as a string of bytes under %s, %q, %x and %X.
+		fmt_string(f, rt_str_from_raw(d, n), verb)
+		return
+	}
+	fb_byte(f, '[')
 	for i in i64(0)..n {
 		if i > 0 {
 			fb_byte(f, ' ')
