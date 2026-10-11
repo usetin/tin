@@ -433,8 +433,14 @@ fn x_checked_rr(op str, dst i64, a i64, b i64, t Ty) {
 	let signed = i64(cast(i64, t) == 0 || t.signed != 0)
 	if k == OVK_MUL && signed == 0 {
 		// mul leaves the high half in rdx and sets CF when it is not zero.
-		x_mov(RAX, a)
-		emit1(X_MULU, b)
+		if b == RAX {
+			// b is a call's result still in rax: moving a there would square a. The product is
+			// the same either way round, so rax keeps b and mul takes a.
+			emit1(X_MULU, a)
+		} else {
+			x_mov(RAX, a)
+			emit1(X_MULU, b)
+		}
 		emit2(X_JCC, XC_B, x_ovf_stub(k))
 		x_mov(dst, RAX)
 		return

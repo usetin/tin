@@ -1,0 +1,50 @@
+package main
+
+// A checked u64 multiply whose right operand is a call's result. On x86-64 the product uses
+// mul, which takes one factor in rax; the call had left its result there, and moving the left
+// factor into rax first multiplied it by itself, so 6 * f() printed 36 and an overflow was
+// missed. Found by differential fuzzing against Go.
+
+import "say"
+
+// pick is not inlined, so its result comes back in rax.
+fn pick(c bool, a u64, b u64) u64 {
+	if c {
+		return a
+	}
+	return b
+}
+
+fn mulCall(x u64, y u64) u64 {
+	return x * pick(true, y, 0)
+}
+
+fn mulCallLeft(x u64, y u64) u64 {
+	return pick(true, x, 0) * y
+}
+
+fn mulBoth(x u64, y u64) u64 {
+	return pick(true, x, 0) * pick(true, y, 0)
+}
+
+fn show(name str, f fn() str) {
+	let v = guard {
+		f()
+	} catch err {
+		say.Line(name, err)
+		return
+	}
+	say.Line(name, "=", v)
+}
+
+fn main() {
+	let g u64 = 6
+	show("6 * f(7)", fn() str { return "{mulCall(g, 7)}" })
+	show("f(6) * 7", fn() str { return "{mulCallLeft(g, 7)}" })
+	show("f(6) * f(7)", fn() str { return "{mulBoth(g, 7)}" })
+	show("6 * f(~6)", fn() str { return "{mulCall(g, ~g)}" })
+	show("f(6) * ~6", fn() str { return "{mulCallLeft(g, ~g)}" })
+	show("f(6) * f(~6)", fn() str { return "{mulBoth(g, ~g)}" })
+	show("2^32 * f(2^32)", fn() str { return "{mulCall(4294967296, 4294967296)}" })
+	show("2^32 * f(2^31)", fn() str { return "{mulCall(4294967296, 2147483648)}" })
+}
