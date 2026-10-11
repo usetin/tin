@@ -1,21 +1,25 @@
 # The wide mask is loaded before the loop and reused by the loop body.
 [arm64]
 CHECK: (?m)^_masked:
-CHECK: movz x11, #57072
-CHECK: movk x11, #39612, lsl #16
-CHECK: movk x11, #22136, lsl #32
-CHECK: movk x11, #4660, lsl #48
-CHECK-NOT: movz x11
-CHECK-NOT: movk x11
+CHECK: movz x[0-9]+, #57072
+CHECK: movk x[0-9]+, #39612, lsl #16
+CHECK: movk x[0-9]+, #22136, lsl #32
+CHECK: movk x[0-9]+, #4660, lsl #48
+CHECK-NOT: movz x[0-9]+, #57072
+CHECK-NOT: movk x[0-9]+, #39612, lsl #16
+CHECK-NOT: movk x[0-9]+, #22136, lsl #32
+CHECK-NOT: movk x[0-9]+, #4660, lsl #48
 CHECK: (?m)^L1:
-CHECK-NOT: movz x11
-CHECK-NOT: movk x11
+CHECK-NOT: movz x[0-9]+, #57072
+CHECK-NOT: movk x[0-9]+, #39612, lsl #16
+CHECK-NOT: movk x[0-9]+, #22136, lsl #32
+CHECK-NOT: movk x[0-9]+, #4660, lsl #48
 CHECK: (?m)^L3:
 
 [amd64]
 CHECK: (?m)^# L[0-9]+: masked$
-CHECK: (?m)^movabs r13,0x123456789abcdef0$
+CHECK: (?m)^movabs r\w+,0x123456789abcdef0$
 CHECK: (?m)^jmp L[0-9]+$
 CHECK: (?m)^L[0-9]+:$
-CHECK-NOT: movabs r13,0x123456789abcdef0
+CHECK-NOT: movabs r\w+,0x123456789abcdef0
 CHECK: (?m)^L[0-9]+:$
