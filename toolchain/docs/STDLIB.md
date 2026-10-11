@@ -3492,16 +3492,16 @@ Package html tokenizes, parses and escapes HTML, as Go's html and golang.org/x/n
 ## mime
 
 - `type Params map[str]str`: Params is a media type's parameters, by lowercased name.
-- `ParseMediaType(v str) !(str, Params)`: ParseMediaType parses a media type and its parameters, like Go's mime.ParseMediaType. The media type is lowercased; parameter names are lowercased and their values unquoted; a parameter repeated with the same value is kept once, a different value is an error.
-- `FormatMediaType(t str, params Params) str`: FormatMediaType returns the media type with its parameters, like Go's mime.FormatMediaType: parameters are sorted by name and a value that is not a token is quoted.
+- `ParseMediaType(v str) !(str, Params)`: ParseMediaType parses a media type and its parameters, like Go's mime.ParseMediaType (RFC 1521, RFC 2183). The media type is lowercased and trimmed; parameter names are lowercased and their values unquoted. RFC 2231 parameters are decoded: name*=utf-8''%e2%82%ac is "€", and the pieces name*0, name*1* ... are joined. A parameter repeated with the same value is kept once, a different value is a fault, and a trailing ";" is allowed. Where Go returns the media type with ErrInvalidMediaParameter, this returns only the fault.
+- `FormatMediaType(t str, params Params) str`: FormatMediaType returns the media type with its parameters, like Go's mime.FormatMediaType: the type and the parameter names are lowercased and the parameters sorted by name. A value that is a token is written as it is, one with only printable ASCII is quoted, and any other is written as RFC 2231 utf-8 with percent escapes (name*=utf-8''caf%C3%A9). A type or a name that is not a token gives "".
 - `TypeByExtension(ext str) str`: TypeByExtension returns the media type for the extension (which must begin with a dot, as in ".png"), lowercased, or "" when it is unknown.
 - `ExtensionsByType(mediatype str) []str`: ExtensionsByType returns the extensions registered for the media type, sorted, or an empty slice when none is.
 - `AddExtensionType(ext str, mediatype str) !`: AddExtensionType registers the media type for an extension, like Go's AddExtensionType: the type must be valid and the extension must begin with a dot.
-- `type WordDecoder struct{}`: WordDecoder decodes RFC 2047 encoded words in header text (the =?utf-8?q?...?= form).
-- `(d WordDecoder) Decode(word str) !str`: Decode decodes one RFC 2047 encoded word, like Go's WordDecoder.Decode: it must be exactly "=?charset?encoding?text?=" with one letter of encoding, and the charset must be one Tin can convert (utf-8, us-ascii or iso-8859-1); anything else is a fault.
-- `(d WordDecoder) DecodeHeader(v str) !str`: DecodeHeader decodes every encoded word in a header value, like Go's DecodeHeader: the plain text around the words is kept, the whitespace between two encoded words is dropped, and a word that cannot be decoded is kept as it was.
-- `type WordEncoder struct{}`: WordEncoder encodes header text as encoded words when it needs to be, like Go's WordEncoder.
-- `(e WordEncoder) EncodeWord(charset str, s str) str`: EncodeWord returns the text as an RFC 2047 encoded word when it has bytes that are not printable ASCII, and the text itself when it does not.
+- `type WordDecoder struct{}`: WordDecoder decodes RFC 2047 encoded words in header text (the =?utf-8?q?...?= form). The charsets utf-8, iso-8859-1 and us-ascii are decoded, as Go's are without a CharsetReader.
+- `(d WordDecoder) Decode(word str) !str`: Decode decodes one RFC 2047 encoded word, like Go's WordDecoder.Decode: it must be exactly "=?charset?encoding?text?=", with an empty text allowed, and the encoding one of B, b, Q and q.
+- `(d WordDecoder) DecodeHeader(header str) !str`: DecodeHeader decodes every encoded word in a header value, like Go's DecodeHeader: the text around the words is kept, the white space between two encoded words is dropped, a word whose text cannot be decoded is kept as it was, and a charset it cannot convert is a fault.
+- `type WordEncoder struct`: WordEncoder encodes header text as RFC 2047 encoded words, in the Q encoding or, for BEncoding, base64. The zero value is the Q encoding.
+- `(e WordEncoder) EncodeWord(charset str, s str) str`: EncodeWord returns s as encoded words in the charset, like Go's WordEncoder.Encode, or s itself when it is ASCII with no control but tab. For utf-8, the text is split into words of at most 75 bytes, separated by a space, without splitting a character.
 
 ## mail
 
