@@ -983,10 +983,48 @@ fn gen_value_store(v i64, size i64) {
 	value_copy_words(X16, r, size, 0)
 }
 
+// VALUE_LOOP_BYTES is the size from which a value struct is copied by a loop rather than one
+// load and store per word (#1275): 32 words, a few cache lines.
+const VALUE_LOOP_BYTES = 256
+
 // value_copy_words copies size bytes from the address in src to the one in dst through x17, or,
 // with zero set, stores x17 (0) over them: words, then a 4-, 2- and 1-byte tail, each naturally
 // aligned since a value struct's size is a multiple of its alignment.
 fn value_copy_words(dst i64, src i64, size i64, zero i64) {
+	value_copy_counted(dst, src, size, zero, -1)
+}
+
+// value_copy_counted is value_copy_words with the loop's counter given: c, a register free here,
+// or -1 for one saved on the stack around the loop, or -2 for no loop (the copy is unrolled).
+fn value_copy_counted(dst i64, src i64, size_in i64, zero i64, c_in i64) {
+	mut size = size_in
+	if size >= VALUE_LOOP_BYTES && c_in != -2 {
+		// A large value is copied by a loop over its words, so its code stays small (#1275): dst
+		// and src step past the words (no caller reads them after the copy), then the tail below.
+		mut c = c_in
+		if c < 0 {
+			c = 15
+			if dst == 15 || src == 15 {
+				c = 14
+			}
+			emit1(I_PUSH, c)
+		}
+		load_imm(c, size / 8)
+		let top = new_label()
+		label(top)
+		if zero == 0 {
+			emit4(I_LD, X17, src, 0, 3)
+			add_imm(src, src, 8)
+		}
+		emit4(I_ST, X17, dst, 0, 3)
+		add_imm(dst, dst, 8)
+		add_imm(c, c, -1)
+		emit2(I_CBNZ, c, top)
+		if c_in < 0 {
+			emit1(I_POP, c)
+		}
+		size = size % 8
+	}
 	mut o = 0
 	mut w = 8
 	for w >= 1 {
@@ -1012,6 +1050,42 @@ shared mut vd_dst i64 // the running function's destination local (0: its result
 shared mut vd_pairs []i64 // [call, destination local or -1] for the running function's calls
 shared mut vd_regs i64 // the running function returns a value struct in registers (dest_regs)
 shared mut vd_bangs []i64 // [call, destination local] for the running function's !T calls (bang_syms, #893)
+
+// cm_free_lane is a result lane register that holds nothing still needed while lane's value
+// struct is copied in after a call with several results (#1275): one read already or not used,
+// and no result's own register. -2 when there is none. x64 picks x86-64's lanes (x_res_reg).
+fn cm_free_lane(syms []Sym, lane i64, x64 i64) i64 {
+	mut n = 0
+	mut i = 0
+	for i < len(syms) {
+		if is_value_area(syms[i]) == 0 && is_dyn_value(cast(Ty, syms[i].type_)) != 0 {
+			n = n + 2
+		} else {
+			n = n + 1
+		}
+		i = i + 1
+	}
+	mut j = 0
+	for j < 8 {
+		mut r = j
+		if x64 != 0 {
+			r = x_res_reg(j)
+		}
+		mut ok = i64(j < lane || j >= n)
+		i = 0
+		for i < len(syms) && ok != 0 {
+			if syms[i].reg == r {
+				ok = 0
+			}
+			i = i + 1
+		}
+		if ok != 0 {
+			return r
+		}
+		j = j + 1
+	}
+	return -2
+}
 
 // dest_regs reports a value struct result of 8 or 16 bytes (#669): it comes back in x0 and x1
 // (rax and rdx on x86-64), as a dyn value does, with no destination. The caller stores the
@@ -4618,7 +4692,9 @@ fn gen_stmt(s i64) {
 			if is_value_area(sym) != 0 {
 				// A value struct result is the address of its bytes: copy them in (#631).
 				fp_offset(X16, sym.off)
-				value_copy_words(X16, lane, cast(Ty, sym.type_).size, 0)
+				// The bytes are in the callee's frame, below sp: a loop's counter is a free lane, not
+				// a register saved on the stack (#1275).
+				value_copy_counted(X16, lane, cast(Ty, sym.type_).size, 0, cm_free_lane(syms, lane, 0))
 				lane = lane + 1
 			} else if is_dyn_value(cast(Ty, sym.type_)) != 0 {
 				if sym.reg == REG_SLOT {

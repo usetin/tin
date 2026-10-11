@@ -1,0 +1,15 @@
+# A large value struct is copied and zeroed by loops over its words (#1275): no store at a large
+# offset from the copy's base anywhere in main, which the unrolled copy made for every word.
+[arm64]
+CHECK: _main.main:
+CHECK-NOT: str x17, \[x16, #[0-9]{3,}\]
+CHECK: cbnz x1[45], L[0-9]+
+CHECK-NOT: str x17, \[x16, #[0-9]{3,}\]
+CHECK: ret
+
+[amd64]
+CHECK: (?m)^L1:$
+CHECK-NOT: QWORD PTR \[r11\+0x[0-9a-f]{3,}\]
+CHECK: jne L[0-9]+
+CHECK-NOT: QWORD PTR \[r11\+0x[0-9a-f]{3,}\]
+CHECK: ret

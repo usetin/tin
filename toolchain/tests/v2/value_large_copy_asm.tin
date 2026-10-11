@@ -1,0 +1,14 @@
+package main
+
+import "say"
+
+// #1275: a 1.6 MB value struct is copied and zeroed by loops, not one load and store per word.
+type V value struct {
+	a [100000]str
+	n i64
+}
+
+fn main() {
+	mut v = V{n: 2}
+	say.Line(v.n)
+}

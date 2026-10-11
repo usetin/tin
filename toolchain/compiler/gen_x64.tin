@@ -1014,11 +1014,12 @@ fn x_value_store(v i64, size i64) {
 		x_gen_to(v, src, 0)
 		x_pop(XSCR)
 	}
+	let left = x_value_loop(XSCR, src, XSCR2, size)
 	mut o = 0
 	mut w = 8
 	mut lg = 3
 	for w >= 1 {
-		for o + w <= size {
+		for o + w <= left {
 			if src >= 0 {
 				x_ld(XSCR2, x_mem1(src, o), lg)
 			}
@@ -1028,6 +1029,36 @@ fn x_value_store(v i64, size i64) {
 		w = w / 2
 		lg = lg - 1
 	}
+}
+
+// x_value_loop copies the words of a value of size bytes from src (-1: stores the zero in data)
+// to dst by a loop when it is large (#1275, gen.tin value_copy_words), stepping dst and src past
+// them, and returns how many tail bytes are left to copy; a small one is left whole.
+fn x_value_loop(dst i64, src i64, data i64, size i64) i64 {
+	if size < VALUE_LOOP_BYTES {
+		return size
+	}
+	mut c = R10
+	if dst == R10 || src == R10 {
+		c = R9
+	}
+	if dst == c || src == c {
+		c = R8
+	}
+	x_push(c)
+	x_load_imm(c, size / 8)
+	let top = new_label()
+	x_label(top)
+	if src >= 0 {
+		x_ld(data, x_mem1(src, 0), 3)
+		emit2(X_ADDI, src, 8)
+	}
+	x_st(data, x_mem1(dst, 0), 3)
+	emit2(X_ADDI, dst, 8)
+	emit2(X_SUBI, c, 1)
+	emit2(X_JCC, XC_NE, top)
+	x_pop(c)
+	return size % 8
 }
 
 // x_vd_pass puts call e's destination in r10, last before the call (#631 A2, gen.tin vd_pass).
@@ -3083,7 +3114,21 @@ fn x_gen_stmt(s i64) {
 				// which no result lane uses (#631).
 				let src = x_res_reg(lane)
 				let size = cast(Ty, sym.type_).size
+				// The bytes are in the callee's frame, below rsp, so nothing is pushed: a large one is
+				// copied by a loop whose index is a free lane, [src+i] to [rbp+off+i] (#1275).
 				mut o = 0
+				let ix = cm_free_lane(syms, lane, 1)
+				if size >= VALUE_LOOP_BYTES && ix >= 0 {
+					let words = (size / 8) * 8
+					x_load_imm(ix, -words)
+					let top = new_label()
+					x_label(top)
+					x_ld(XSCR, x64_mem(src, ix, 1, words), 3)
+					x_st(XSCR, x64_mem(RBP, ix, 1, sym.off + words), 3)
+					emit2(X_ADDI, ix, 8)
+					emit2(X_JCC, XC_NE, top)
+					o = words
+				}
 				mut w = 8
 				mut lg = 3
 				for w >= 1 {
