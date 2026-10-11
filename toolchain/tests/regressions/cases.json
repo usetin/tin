@@ -1627,5 +1627,15 @@
       "stdout": "2\n5\n6\n6\n",
       "stderr": ""
     }
+  },
+  {
+    "source": "signed-pow2-division.tin",
+    "issue": 1163,
+    "expected": {
+      "phase": "run",
+      "exit": 0,
+      "stdout": "-2 -1\n-2 1\n-1152921504606846976 0\n1152921504606846976 0\n1 0\n",
+      "stderr": ""
+    }
   }
 ]

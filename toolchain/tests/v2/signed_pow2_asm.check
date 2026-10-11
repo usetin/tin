@@ -1,0 +1,18 @@
+# Signed power-of-two division uses the bias and arithmetic shift without control flow.
+[arm64]
+CHECK: _quotient:
+CHECK-NOT: (?m)^\s*b\.
+CHECK: _negativeQuotient:
+CHECK-NOT: (?m)^\s*b\.
+CHECK: _remainder:
+CHECK-NOT: (?m)^\s*b\.
+CHECK: _main.main:
+
+[amd64]
+CHECK: # L1: quotient
+CHECK: # L2: negativeQuotient
+CHECK: # L3: remainder
+CHECK: # L4: main.main
+CHECK: (?ms)^L1:\n(?:(?!^L2:|^j\w+\b)[\s\S])*?sar[\s\S]*?(?=^L2:)
+CHECK: (?ms)^L2:\n(?:(?!^L3:|^j\w+\b)[\s\S])*?sar[\s\S]*?(?=^L3:)
+CHECK: (?ms)^L3:\n(?:(?!^L4:|^j\w+\b)[\s\S])*?sar[\s\S]*?(?=^L4:)

@@ -641,6 +641,17 @@ fn pow2_log(c i64) i64 {
 	return k
 }
 
+// signed_pow2_log is log2(abs(c)) for a signed power-of-two divisor.
+fn signed_pow2_log(c i64) i64 {
+	if c == -9223372036854775807 - 1 {
+		return 63
+	}
+	if c < 0 {
+		return pow2_log(-c)
+	}
+	return pow2_log(c)
+}
+
 // k when c == 2^k - 1 (k ones), else 0.
 fn low_mask_bits(c i64) i64 {
 	if c <= 0 || (c & (c + 1)) != 0 {
@@ -2318,7 +2329,7 @@ fn gen_binary_const(op str, dst i64, l i64, c i64) {
 			emit3(I_MUL, dst, l, X17)
 		}
 	} else if op == "/" {
-		let k = pow2_log(c)
+		let k = signed_pow2_log(c)
 		if c == 1 {
 			mov(dst, l)
 		} else if c == -1 {
@@ -2331,6 +2342,9 @@ fn gen_binary_const(op str, dst i64, l i64, c i64) {
 		} else if k > 0 {
 			round_bias(l, k)
 			emit3(I_ASRI, dst, X17, k)
+			if c < 0 {
+				emit2(I_NEG, dst, dst)
+			}
 		} else {
 			load_imm(X17, c)
 			emit3(I_SDIV, dst, l, X17)
@@ -2340,7 +2354,7 @@ fn gen_binary_const(op str, dst i64, l i64, c i64) {
 		if m < 0 && m != -9223372036854775807 - 1 {
 			m = -m
 		}
-		let k = pow2_log(m)
+		let k = signed_pow2_log(c)
 		if m == 1 {
 			emit3(I_MOVZ, dst, 0, 0)
 		} else if c == 0 && cast(Fn, cur_gen_fn).generated == 0 {
