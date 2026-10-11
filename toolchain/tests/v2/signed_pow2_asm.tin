@@ -1,0 +1,17 @@
+package main
+
+fn quotient(n i64) i64 {
+	return n / 8
+}
+
+fn negativeQuotient(n i64) i64 {
+	return n / -8
+}
+
+fn remainder(n i64) i64 {
+	return n % 8
+}
+
+fn main() {
+	_ = quotient(-17) + negativeQuotient(-17) + remainder(-17)
+}
