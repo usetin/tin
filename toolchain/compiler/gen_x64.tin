@@ -30,6 +30,7 @@ shared mut x_nstack i64 // stack parameters of the current function
 shared mut x_div_label i64 // the current function's divide-by-zero stub, once used
 shared mut x_ovf_labels []i64 // the current function's overflow stub per OVK_* kind, 0 until used (#362)
 shared mut x_tail_entry i64 // body entry for safe self-tail calls
+shared mut x_temp_pool_audit_probe i64 // test-only: force the next x_treg access past the pool
 
 fn x_label(l i64) {
 	emit1(X_LABEL, l)
@@ -821,6 +822,19 @@ fn x_mask(e Node, dst i64) {
 	x_canon(cast(Ty, e.type_), dst)
 }
 
+// x_treg makes an out-of-pool depth a compiler-build failure. Keep this check at the
+// accessor boundary so every hand-computed depth in the amd64 generator is audited.
+fn x_treg(d i64) i64 {
+	if x_temp_pool_audit_probe != 0 {
+		x_temp_pool_audit_probe = 0
+		d = len(t_regs)
+	}
+	if d < 0 || d >= len(t_regs) {
+		panic("amd64 temporary depth outside register pool")
+	}
+	return treg(d)
+}
+
 // ---- expressions ----
 // x_gen_val returns a register holding e: a local's own register, or temp depth d.
 fn x_gen_val(e i64, d i64) i64 {
@@ -835,7 +849,7 @@ fn x_gen_val(e i64, d i64) i64 {
 	if e_fp(cast(Node, e)) != 0 {
 		r = freg(d)
 	} else {
-		r = treg(d)
+		r = x_treg(d)
 	}
 	x_gen_to(e, r, d)
 	return r
@@ -956,7 +970,7 @@ fn x_value_store(v i64, size i64) {
 		x_load_imm(XSCR2, 0)
 	} else {
 		x_push(XSCR)
-		src = treg(0)
+		src = x_treg(0)
 		x_gen_to(v, src, 0)
 		x_pop(XSCR)
 	}
@@ -2236,8 +2250,8 @@ fn x_gen_call(e i64, d i64) {
 	for i < n {
 		let a = cast(Node, args[i])
 		if is_dyn_value(cast(Ty, a.type_)) != 0 {
-			let r0 = treg(d)
-			let r1 = treg(d + 1)
+			let r0 = x_treg(d)
+			let r1 = x_treg(d + 1)
 			x_gen_dyn_pair(cast(i64, a), r0, r1, d)
 			x_push(r0)
 			x_push(r1)
@@ -2458,7 +2472,7 @@ fn x_gen_effect(e i64) {
 		if e_fp(cast(Node, e)) != 0 {
 			r = freg(0)
 		} else {
-			r = treg(0)
+			r = x_treg(0)
 		}
 		x_gen_intrinsic(cast(Call, e), r, 0)
 	} else {
@@ -2480,8 +2494,8 @@ fn x_assign_local(s Sym, v i64) {
 		return
 	}
 	if is_dyn_value(cast(Ty, s.type_)) != 0 {
-		let r0 = treg(0)
-		let r1 = treg(1)
+		let r0 = x_treg(0)
+		let r1 = x_treg(1)
 		x_gen_dyn_pair(v, r0, r1, 0)
 		if s.reg == REG_SLOT {
 			x_slot_store(r0, s.off)
@@ -2511,8 +2525,8 @@ fn x_gen_store_mem(t i64, v i64) {
 	if is_dyn_value(cast(Ty, cast(Node, t).type_)) != 0 {
 		x_gen_dyn_addr(cast(Node, t), 0)
 		x_push(XSCR)
-		let r0 = treg(0)
-		let r1 = treg(1)
+		let r0 = x_treg(0)
+		let r1 = x_treg(1)
 		x_gen_dyn_pair(v, r0, r1, 0)
 		x_pop(XSCR)
 		x_st(r0, x_mem1(XSCR, 0), 3)
@@ -2531,7 +2545,7 @@ fn x_gen_store_mem(t i64, v i64) {
 		d = next_depth(h, 0)
 		let ix = cast(ElemExpr, t).idx
 		if is_const(ix) != 0 && cast(ElemExpr, t).safe == 0 {
-			idx = treg(d)
+			idx = x_treg(d)
 			x_load_imm(idx, const_val(ix))
 			d = d + 1
 		} else if is_const(ix) == 0 {
@@ -2548,7 +2562,7 @@ fn x_gen_store_mem(t i64, v i64) {
 			base = h
 			off = 8
 		} else {
-			base = treg(d)
+			base = x_treg(d)
 			d = d + 1
 			x_ld(base, x_mem1(h, 16), 3)
 		}
@@ -2572,7 +2586,7 @@ fn x_gen_store_mem(t i64, v i64) {
 			if x_scale_ok(cast(MemExpr, t).scale) != 0 {
 				scale = cast(MemExpr, t).scale
 			} else {
-				let nb = treg(d)
+				let nb = x_treg(d)
 				d = d + 1
 				emit3(X_IMUL_RRI, nb, idx, cast(MemExpr, t).scale)
 				emit2(X_ADD, nb, base)
@@ -2587,7 +2601,7 @@ fn x_gen_store_mem(t i64, v i64) {
 		if fpv != 0 {
 			cur = freg(d)
 		} else {
-			cur = treg(d)
+			cur = x_treg(d)
 		}
 		mm_base = base
 		mm_index = idx
@@ -2639,7 +2653,7 @@ fn x_gen_store_index(t IndexExpr, v i64) {
 		if fpv != 0 {
 			cur = freg(d)
 		} else {
-			cur = treg(d)
+			cur = x_treg(d)
 		}
 		x_ld(cur, m, 3)
 		let saved = node_copy(cast(Binary, v).l)
@@ -2680,8 +2694,8 @@ fn x_gen_assign(s AssignStmt) {
 		return
 	}
 	if is_dyn_value(cast(Ty, sym.type_)) != 0 {
-		let r0 = treg(0)
-		let r1 = treg(1)
+		let r0 = x_treg(0)
+		let r1 = x_treg(1)
 		x_gen_dyn_pair(v, r0, r1, 0)
 		if sym.tls != 0 {
 			x_st(r0, x_mem1(XCTX, tls_off(sym)), 3)
@@ -2802,7 +2816,7 @@ fn x_gen_word_pair(s1 i64, s2 i64) i64 {
 	mut y = mw_b
 	mut dst = s.reg
 	if dst < 0 {
-		dst = treg(0)
+		dst = x_treg(0)
 	}
 	// y must outlive x's move into dst: add the other way round when y lives there.
 	if cast(Node, y).kind == EX_IDENT && cast(Sym, cast(IdentExpr, y).ref).reg == dst {
@@ -2978,8 +2992,8 @@ fn x_gen_return(s ReturnStmt) {
 			let v = cast(Node, vals[i])
 			lanes = append(lanes, nlanes)
 			if is_dyn_value(cast(Ty, v.type_)) != 0 {
-				let r0 = treg(0)
-				let r1 = treg(1)
+				let r0 = x_treg(0)
+				let r1 = x_treg(1)
 				x_gen_dyn_pair(cast(i64, v), r0, r1, 0)
 				x_push(r0)
 				x_push(r1)

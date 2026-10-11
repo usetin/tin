@@ -1,0 +1,23 @@
+package main
+
+import "./ci"
+import "twine"
+
+// The pool probe forces the same invalid depth as the historical treg(5) with five temps.
+// The compiler must reject the amd64 build before it can emit a program using the bad register.
+fn main() {
+	let dir = ci.TempDir(ci.Join(ci.Root(), "bin/ci"), "x64-temp-pool-")
+	let source = ci.Join(dir, "probe.tin")
+	ci.Write(source, `package main
+import "say"
+fn main() {
+    say.Line(1 + 2)
+}
+`)
+	let output = ci.Join(dir, "probe")
+	let result = ci.ExecEnv([]str{ci.Join(ci.Root(), "bin/tinc"), "-target", "linux-amd64", "-o", output, source}, ci.Root(), 120,
+		[]str{"TIN_ROOT=" + ci.Root(), "TINC_X64_TEMP_POOL_AUDIT_TEST=1"}, []str{})
+	ci.Test("forced amd64 temp depth fails during compiler build", result.Code != 0 && twine.Contains(result.Stderr, "amd64 temporary depth outside register pool"))
+	ci.Remove(dir)
+	ci.Finish()
+}
