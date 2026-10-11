@@ -3760,7 +3760,9 @@ Fix: call `body()` inside `Run` (as often as the policy needs) and keep only its
 ### E701 NOT_MUT
 
 Parameters are read-only unless declared `mut`: changing a parameter's fields, elements or
-map entries, or appending to it, needs `mut` on the parameter (and at the call).
+map entries, or appending to it, needs `mut` on the parameter (and at the call). A struct
+local copied from a parameter (`mut a = x`) is the same object, so changing it is changing the
+parameter, also inside a closure, a boundary block or an arena nested in another (#1060).
 
 The check applies to a `.tin` file outside the trusted set: `toolchain/std/`, `packages/`, `toolchain/runtime/`, `toolchain/compiler/`, `tools/`, `selfhost/`, and a vendored package granted the unsafe capability. Trusted code is checked by people and may grow a parameter in place, so the compiler does not report it there. A value struct parameter (#631) is checked in every file, since its bytes are its caller's.
 

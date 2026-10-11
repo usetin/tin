@@ -194,7 +194,8 @@ fn get(q anvil.Req, w mut anvil.Out) {
 		return
 	}
 	let d = a.Deps
-	let (r, err) = answer(a.Server, q, d.FetchWithin, d.FetchMemory)
+	mut srv = a.Server
+	let (r, err) = answer(mut srv, q, d.FetchWithin, d.FetchMemory)
 	if err != nil {
 		refusal(mut w, a.Server, q, err)
 		return
@@ -203,11 +204,11 @@ fn get(q anvil.Req, w mut anvil.Out) {
 }
 
 // answer is the server's answer to a request with a small body, inside the request's budget.
-fn answer(srv transport.Server, q anvil.Req, within_ i64, mem i64) !transport.Reply {
+fn answer(srv mut transport.Server, q anvil.Req, within_ i64, mem i64) !transport.Reply {
 	mut out = transport.Reply{Status: 500, Body: ""}
+	mut s = srv
 	try within within_ {
 		try limit memory mem {
-			mut s = srv
 			out = s.Handle(q.Method, q.Path, q.Header("tit-signature"), q.Body(), now())
 		}
 	}
@@ -247,7 +248,8 @@ fn post(q anvil.Req, w mut anvil.Out) {
 			refuse(mut w, 403, "Unauthorized", "you can read {a.Repo.Owner}/{a.Repo.Name} but not push to it")
 			return
 		}
-		let (r, err) = push(srv, q, body, d.PushWithin, d.PushMemory)
+		mut pb = body
+		let (r, err) = push(mut srv, q, mut pb, d.PushWithin, d.PushMemory)
 		if err != nil {
 			refusal(mut w, srv, q, err)
 			return
@@ -266,7 +268,7 @@ fn post(q anvil.Req, w mut anvil.Out) {
 	}
 	// the plan (what to send) inside the fetch's budget; the pack then goes out an entry at a time, under the
 	// request's deadline
-	let (planned, perr) = plan(srv, q, req, d.FetchWithin, d.FetchMemory)
+	let (planned, perr) = plan(mut srv, q, req, d.FetchWithin, d.FetchMemory)
 	if perr != nil {
 		refusal(mut w, srv, q, perr)
 		return
@@ -289,12 +291,12 @@ fn post(q anvil.Req, w mut anvil.Out) {
 }
 
 // push receives a push inside push.deadline and push.memory.
-fn push(srv transport.Server, q anvil.Req, body anvil.BodyReader, within_ i64, mem i64) !transport.Reply {
+fn push(srv mut transport.Server, q anvil.Req, body mut anvil.BodyReader, within_ i64, mem i64) !transport.Reply {
 	mut out = transport.Reply{Status: 500, Body: ""}
+	mut s = srv
+	mut b = body
 	try within within_ {
 		try limit memory mem {
-			mut s = srv
-			mut b = body
 			out = transport.HandleStream(mut s, q.Method, q.Path, q.Header("tit-signature"), mut b, now())
 		}
 	}
@@ -302,11 +304,11 @@ fn push(srv transport.Server, q anvil.Req, body anvil.BodyReader, within_ i64, m
 }
 
 // plan checks a fetch and works out what to send.
-fn plan(srv transport.Server, q anvil.Req, req str, within_ i64, mem i64) !transport.Fetching {
+fn plan(srv mut transport.Server, q anvil.Req, req str, within_ i64, mem i64) !transport.Fetching {
 	mut out ?transport.Fetching = nil
+	mut s = srv
 	try within within_ {
 		try limit memory mem {
-			mut s = srv
 			let f = try s.StartFetch(q.Path, q.Header("tit-signature"), req, now())
 			out = keep(f)
 		}

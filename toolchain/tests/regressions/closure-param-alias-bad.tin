@@ -1,0 +1,25 @@
+package main
+
+// #1060: a closure that changes a mut copy of a by-value parameter changes the caller's object,
+// as the same store outside the closure does, so it is E701 too. Before, a closure with no
+// parameters of its own skipped the check, and this changed main's let struct.
+
+import "say"
+
+type S struct {
+	n i64
+}
+
+fn f(x S) {
+	mut a = x
+	let g = fn() {
+		a.n = 9
+	}
+	g()
+}
+
+fn main() {
+	let s = S{n: 0}
+	f(s)
+	say.Line(s.n)
+}

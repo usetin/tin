@@ -1,0 +1,30 @@
+package main
+
+// #1060: what a closure stores through a mut copy of its parent's mut parameter reaches the
+// parent's summary, so a caller passing long-lived memory gets E312, as it does when the parent
+// stores it itself. Before, the store was recorded against the closure's own parameters.
+
+import "say"
+
+type C struct {
+	v i64
+}
+
+type S struct {
+	c C
+}
+
+mut g S = S{c: C{v: 0}}
+
+fn set(x mut S) {
+	mut a = x
+	let h = fn() {
+		a.c = C{v: 3}
+	}
+	h()
+}
+
+fn main() {
+	set(mut g)
+	say.Line(g.c.v)
+}

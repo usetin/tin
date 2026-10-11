@@ -91,7 +91,8 @@ fn reviewDeps(dir str) review.Deps {
 }
 
 fn handlers(dir str) []events.Handler {
-	mut hs = workers.Handlers(workers.NewDeps(pg, storeAt(dir), dir, 16))
+	mut wd = workers.NewDeps(pg, storeAt(dir), dir, 16)
+	mut hs = workers.Handlers(mut wd)
 	hs = append(hs, review.Handlers(reviewDeps(dir))...)
 	return hs
 }

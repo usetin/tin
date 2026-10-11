@@ -150,7 +150,7 @@ fn handlers() []events.Handler {
 	}
 	mut wd = workers.NewDeps(pg, st, boot.Conf.PacksDir, boot.Conf.RepackPacks)
 	wd.Follows = []str{index.Kind}
-	mut all = workers.Handlers(wd)
+	mut all = workers.Handlers(mut wd)
 	capsules.Configure(capsules.Deps{Db: pg, Store: st, Dir: boot.Conf.PacksDir, Auth: signin.Caller})
 	all = append(all, capsules.Handlers()...)
 	all = append(all, notify.Handlers(notifyDeps(boot.Conf))...)

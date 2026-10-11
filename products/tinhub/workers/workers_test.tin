@@ -232,8 +232,8 @@ fn stateOf(c postgres.Client, id i64, hash str) str {
 	return rows.Rows[0][0].Text()
 }
 
-fn handler(d Deps, kind str) ?events.Handler {
-	for h in Handlers(d) {
+fn handler(d mut Deps, kind str) ?events.Handler {
+	for h in Handlers(mut d) {
 		if h.Kind == kind {
 			return h
 		}
@@ -264,7 +264,7 @@ fn TestRepack(t mut crucible.T) {
 		[]str{}
 	}
 	crucible.Equal(mut t, "four live packs", len(before), 4)
-	let h = handler(f.d, KindRepack)
+	let h = handler(mut f.d, KindRepack)
 	if h == nil {
 		t.Error("no repack handler")
 		return
@@ -384,7 +384,7 @@ fn TestPrune(t mut crucible.T) {
 		return
 	}
 	crucible.Equal(mut t, "a prune within the retention removes nothing", young.Objects, 0)
-	let h = handler(f.d, KindPrune)
+	let h = handler(mut f.d, KindPrune)
 	if h == nil {
 		t.Error("no prune handler")
 		return
@@ -453,7 +453,7 @@ fn TestPurge(t mut crucible.T) {
 		t.Error("request: {err}")
 		return
 	}
-	let h = handler(f.d, KindPurge)
+	let h = handler(mut f.d, KindPurge)
 	if h == nil {
 		t.Error("no purge handler")
 		return
@@ -555,7 +555,7 @@ fn TestPushFanOut(t mut crucible.T) {
 		return
 	}
 	crucible.Equal(mut t, "four push events", len(pushes.Rows), 4)
-	let h = handler(f.d, KindPush)
+	let h = handler(mut f.d, KindPush)
 	if h == nil {
 		t.Error("no push handler")
 		return
@@ -622,7 +622,7 @@ fn TestMirror(t mut crucible.T) {
 		t.Error("mirror row: {err}")
 		postgres.Result{Affected: 0}
 	}
-	let h = handler(f.d, KindMirror)
+	let h = handler(mut f.d, KindMirror)
 	if h == nil {
 		t.Error("no mirror handler")
 		return

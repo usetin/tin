@@ -56,25 +56,27 @@ fn NewDeps(c postgres.Client, s dyn packs.PackStore, dir str, repackPacks i64) D
 }
 
 // Handlers is every handler of this package, with the budgets of design/tinhub.md §6.
-fn Handlers(d Deps) []events.Handler {
+fn Handlers(d mut Deps) []events.Handler {
+	// every job runs with this Deps: a handler's mut dd = wd is the same object, not a copy (#1060)
+	mut wd = d
 	return []events.Handler{
 		events.Handler{Kind: KindPush, Within: 30 * tide.Second, Memory: 32 * 1024 * 1024, Tasks: 4, MaxAttempts: 10, Run: fn(j events.Job) ! {
-			try runPush(d, j)
+			try runPush(wd, j)
 		}},
 		events.Handler{Kind: KindRepack, Within: 10 * tide.Minute, Memory: 512 * 1024 * 1024, Tasks: 4, MaxAttempts: 10, Run: fn(j events.Job) ! {
-			mut dd = d
+			mut dd = wd
 			_ = try Repack(mut dd, j.RepoId)
 		}},
 		events.Handler{Kind: KindPrune, Within: 30 * tide.Minute, Memory: 512 * 1024 * 1024, Tasks: 4, MaxAttempts: 10, Run: fn(j events.Job) ! {
-			mut dd = d
+			mut dd = wd
 			try runPrune(mut dd, j)
 		}},
 		events.Handler{Kind: KindPurge, Within: 30 * tide.Minute, Memory: 512 * 1024 * 1024, Tasks: 4, MaxAttempts: 10, Run: fn(j events.Job) ! {
-			mut dd = d
+			mut dd = wd
 			try runPurge(mut dd, j)
 		}},
 		events.Handler{Kind: KindMirror, Within: 10 * tide.Minute, Memory: 256 * 1024 * 1024, Tasks: 4, MaxAttempts: 10, Run: fn(j events.Job) ! {
-			mut dd = d
+			mut dd = wd
 			_ = try Mirror(mut dd, j.RepoId)
 		}},
 	}
