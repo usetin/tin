@@ -1,0 +1,8 @@
+6 * f(7) = 42
+f(6) * 7 = 42
+f(6) * f(7) = 42
+6 * f(~6) panic: integer overflow: *
+f(6) * ~6 panic: integer overflow: *
+f(6) * f(~6) panic: integer overflow: *
+2^32 * f(2^32) panic: integer overflow: *
+2^32 * f(2^31) = 9223372036854775808
