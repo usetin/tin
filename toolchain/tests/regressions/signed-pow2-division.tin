@@ -1,0 +1,11 @@
+package main
+
+const minI64 = -9223372036854775807 - 1
+
+fn main() {
+	println(-17 / 8, -17 % 8)
+	println(17 / -8, 17 % -8)
+	println(minI64 / 8, minI64 % 8)
+	println(minI64 / -8, minI64 % -8)
+	println(minI64 / minI64, minI64 % minI64)
+}
