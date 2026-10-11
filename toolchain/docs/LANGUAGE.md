@@ -310,7 +310,8 @@ fn main() {
   (`@json("id") id i64`, section 19).
 - Fields of type `str`, `[]T` and `[N]T` that a literal leaves out start as `""` and
   empty slices; numbers as 0. Fields of struct, map and func type must be set (they cannot
-  be nil); make them `?T` to allow nil.
+  be nil); make them `?T` to allow nil. So a struct whose struct fields lead back to itself
+  could never be built, and is E206 (#1274): an optional, slice or map on the way breaks it.
 - `p.x` reads a field, `p.x = 3` writes it (see `mut` parameters in section 5).
 - `new(T)` is `T{}`.
 

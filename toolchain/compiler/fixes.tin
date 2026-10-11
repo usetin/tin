@@ -53,6 +53,7 @@ fn fix_table() str {
 		"E203\tinitialize the variable (`mut p = Point{{}}`), use `?T` for a value that may be missing, or make the slice empty with a capacity (`make([]T, 0, n)`) and `append`. For a map whose keys may be missing, give it `?dyn S` values: `m[k]` then reads nil for a missing key.\n" +
 		"E204\ttake the values as separate parameters (`fn sum(a i64, b i64)`), or a struct.\n" +
 		"E205\thold the next values through a slice (`kids []Node`), or make the type a reference struct.\n" +
+		"E206\tmake a field on the way optional (`next ?Node`), or hold the values through a slice (`kids []Node`).\n" +
 		"E210\tpass one argument per parameter; to take any number of values, declare the last parameter variadic (`xs ...T`) or pass a slice.\n" +
 		"E211\tpass the slice itself (`first(xs)`), or put the spread slice last in a call to a variadic function.\n" +
 		"E213\tcorrect the field name, or add the field to the struct.\n" +

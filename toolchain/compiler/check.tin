@@ -781,6 +781,63 @@ fn value_reaches(t Ty, target Ty, seen []i64) i64 {
 	return 0
 }
 
+// struct_must_hold reports whether every value of type t holds a target: t is target, or a
+// struct whose field must hold one. A struct field is never nil, a value struct and an inline
+// array hold theirs in place; an optional, a slice, a map or a function may be empty (#1274).
+fn struct_must_hold(t Ty, target Ty, seen []i64) i64 {
+	if cast(i64, t) == 0 {
+		return 0
+	}
+	if cast(i64, t) == cast(i64, target) {
+		return 1
+	}
+	if slice_has(seen, cast(i64, t)) != 0 {
+		return 0
+	}
+	seen = append(seen, cast(i64, t))
+	if t.kind == K_VARRAY {
+		return i64(t.key > 0 && struct_must_hold(cast(Ty, t.elem), target, seen) != 0)
+	}
+	if t.kind != K_STRUCT || cast(i64, t.fields) == 0 || cast(i64, t.enum_) != 0 {
+		// (an enum holds one of its variants, so it can always pick another)
+		return 0
+	}
+	mut i = 0
+	for i < len(t.fields) {
+		if struct_must_hold(cast(Ty, cast(Field, t.fields[i]).ty), target, seen) != 0 {
+			return 1
+		}
+		i = i + 1
+	}
+	return 0
+}
+
+// struct_cycles reports a reference struct that must hold itself (E206): a value of it needs
+// one already made, so none can be (Go's invalid recursive type), and a generator walking its
+// fields (argo.Get) would never end (#1274). A value struct that holds itself is E205.
+fn struct_cycles(d Decl, st Ty) {
+	if st.kind != K_STRUCT || st.value != 0 || cast(i64, st.fields) == 0 || cast(i64, st.enum_) != 0 {
+		return
+	}
+	let src = cast([]i64, cast(TypeExpr, d.type_).a)
+	mut i = 0
+	for i < len(st.fields) && i < len(src) {
+		if struct_must_hold(cast(Ty, cast(Field, st.fields[i]).ty), st, []i64{}) != 0 {
+			let m = err_code(cast(Node, cast(ParsedField, src[i]).ty).pos, "E206 RECURSIVE_STRUCT")
+			buf_str(m, "struct ")
+			type_name(cast([]u8, m), st)
+			buf_str(m, " must hold itself through field ")
+			buf_str(m, cast(Field, st.fields[i]).name)
+			buf_str(m, ", so no value of it can be made: make a field on the way optional (?T) or hold it through a slice ([]T)")
+			err_end(cast([]u8, m))
+			// Break the cycle, as E205 does, so nothing after this walks it without end.
+			cast(Field, st.fields[i]).ty = ty_int
+			return
+		}
+		i = i + 1
+	}
+}
+
 // value_resolving holds the value structs whose fields are being resolved (value_first).
 shared mut value_resolving []i64 = []i64{}
 
@@ -1226,6 +1283,16 @@ fn check() {
 			} else {
 				name_type(q, ut)
 			}
+		}
+		i = i + 1
+	}
+	// Every struct of the package is resolved: one that must hold itself is E206 (#1274).
+	i = 0
+	for i < len(prog_types) {
+		let d = prog_types[i]
+		if cast(i64, d.tparams) == 0 && !is_builtin_name(d.name) && cast(Node, d.type_).kind == TX_STRUCT {
+			set_file(d.file)
+			struct_cycles(d, cast(Ty, find_type(qual(ck_pkg, d.name))))
 		}
 		i = i + 1
 	}

@@ -1194,6 +1194,32 @@ example.tin:5:7: error E205 RECURSIVE_VALUE: value struct Node holds itself thro
 
 Fix: hold the next values through a slice (`kids []Node`), or make the type a reference struct.
 
+### E206 RECURSIVE_STRUCT
+
+A struct field is never nil, so a reference struct whose struct fields lead back to itself
+(directly, through other structs, value structs or inline arrays) needs a value of itself
+before it can be made: none can ever be built (#1274). An optional, a slice or a map on the
+way can be empty, and breaks the cycle.
+
+```tin edition=1
+package main
+
+type Node struct {
+	v    i64
+	next Node
+}
+
+fn main() {
+}
+```
+
+```text
+example.tin:5:7: error E206 RECURSIVE_STRUCT: struct Node must hold itself through field next, so no value of it can be made: make a field on the way optional (?T) or hold it through a slice ([]T)
+```
+
+Fix: make a field on the way optional (`next ?Node`), or hold the values through a slice
+(`kids []Node`).
+
 ### E210 ARG_COUNT
 
 A call passes exactly as many arguments as the function has parameters (a variadic
