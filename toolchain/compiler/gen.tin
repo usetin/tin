@@ -1537,8 +1537,12 @@ fn gen_pair(lexp i64, rexp i64, d i64) {
 	if is_real_call(rexp) != 0 && e_fp(cast(Node, lexp)) == 0 && l == 0 && d >= t_count {
 		// l was computed past the temp pool, into x0, which gen_call does not save and the call's result overwrites
 		// (a - b2i(x > a) in a deep expression computed a - a, #811): park l on the stack across the call.
-		emit1(I_PUSH, l)
-		gen_call(rexp, d2)
+		if is_fp(l) != 0 {
+			emit1(I_FPUSH, l)
+		} else {
+			emit1(I_PUSH, l)
+		}
+		gen_call(rexp, d)
 		if rfp != 0 {
 			mov(FSCR, FPR)
 			r = FSCR
@@ -1546,13 +1550,40 @@ fn gen_pair(lexp i64, rexp i64, d i64) {
 			mov(X17, 0)
 			r = X17
 		}
-		emit1(I_POP, l)
+		if is_fp(l) != 0 {
+			emit1(I_FPOP, l)
+		} else {
+			emit1(I_POP, l)
+		}
+	} else if is_real_call(rexp) != 0 && (room(d2, rfp) == 0 || room(d2, 1 - rfp) == 0) {
+		// Calls can reach the exhausted class through conversions in their arguments.
+		// Stage l and evaluate at d so nested arguments never start beyond either pool.
+		if is_fp(l) != 0 {
+			emit1(I_FPUSH, l)
+		} else {
+			emit1(I_PUSH, l)
+		}
+		gen_call(rexp, d)
+		if rfp != 0 {
+			mov(FSCR, FPR)
+			r = FSCR
+		} else {
+			mov(X17, 0)
+			r = X17
+		}
+		if is_fp(l) != 0 {
+			emit1(I_FPOP, l)
+		} else {
+			emit1(I_POP, l)
+		}
 	} else if is_real_call(rexp) != 0 {
 		gen_call(rexp, d2)
 		if rfp != 0 {
 			r = FPR
 		}
-	} else if room(d2, rfp) == 0 {
+	} else if room(d2, rfp) == 0 || room(d2, 1 - rfp) == 0 {
+		// A conversion can evaluate its source in the other register class at d2.
+		// Stage l before that source reaches a pool whose depth has already run out.
 		if is_fp(l) != 0 {
 			emit1(I_FPUSH, l)
 		} else {

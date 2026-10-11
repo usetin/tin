@@ -846,6 +846,10 @@ fn compiler_main(argc i64, argv i64) i64 {
 	compiler_edition = -1
 	compiler_polls = 0
 	polls_auto = 1
+	let pool_audit_probe = host_getenv("TINC_X64_TEMP_POOL_AUDIT_TEST")
+	if pool_audit_probe != 0 && i64(load8(pool_audit_probe)) == '1' {
+		x_temp_pool_audit_probe = 1
+	}
 	let polls_env = host_getenv("TINC_POLLS")
 	if polls_env != 0 && i64(load8(polls_env)) == '1' {
 		compiler_polls = 1
