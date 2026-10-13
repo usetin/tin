@@ -103,6 +103,7 @@ fn packages() []str {
 		"s3", "S3-compatible object storage client with Signature Version 4 (aws-sdk-go-v2 s3)",
 		"atomic", "counters and flags every core may change (sync/atomic)",
 		"lane", "a bounded queue between the tasks of one core (buffered channels)",
+		"latch", "exclusive and reader/writer latches that park a waiting task (sync.Mutex, sync.RWMutex)",
 		"replay", "recording and reading request capsules for tin replay",
 		"stencil", "text templates loaded at run time (text/template)",
 		"htmltpl", "HTML templates with contextual escaping (html/template)",

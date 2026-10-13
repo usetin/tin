@@ -1,0 +1,178 @@
+package main
+
+import "atomic"
+import "hearth"
+import "latch"
+import "say"
+import "tide"
+
+// atomic's operations on a slot of a shared []i64, fetch-add and a cache-line counter, and latch's
+// Mutex and RWMutex under task and cross-core load: one holder at a time, readers never with a
+// writer, exact totals from every core, and a futex wait woken by another core.
+
+shared let slots = build(8)
+shared let counter = atomic.NewInt(0)
+shared let inside = atomic.NewInt(0)
+shared let maxInside = atomic.NewInt(0)
+shared let mu = latch.New()
+shared let rw = latch.NewRWMutex()
+shared let readers = atomic.NewInt(0)
+shared let writers = atomic.NewInt(0)
+shared let violation = atomic.NewBool(false)
+shared let waited = atomic.NewInt(0)
+shared let perCore = buildCounters(8)
+
+fn build(n i64) []i64 {
+	return make([]i64, n)
+}
+
+fn buildCounters(n i64) []atomic.Counter {
+	mut xs = make([]atomic.Counter, 0, n)
+	for i in 0..n {
+		xs = append(xs, atomic.NewCounter())
+	}
+	return xs
+}
+
+// holder takes the mutex, notes that it is inside, waits, and leaves: the wait makes the tasks
+// interleave, so a latch that did not exclude would show two holders at once.
+fn holder() ! {
+	for i in 0..50 {
+		try mu.Lock()
+		let n = inside.Add(1)
+		if n > maxInside.Load() {
+			maxInside.Store(n)
+		}
+		tide.Sleep(1ms)
+		inside.Add(-1)
+		mu.Unlock()
+	}
+}
+
+// hammer is one core's load on the shared slots, the shared counter and its own cache-line counter.
+fn hammer(core i64) {
+	for i in 0..25000 {
+		atomic.AddAt(slots, i % 4, 1)
+		counter.Add(1)
+		perCore[core].Add(1)
+	}
+}
+
+fn rwReader() ! {
+	for i in 0..50 {
+		try rw.RLock()
+		readers.Add(1)
+		if writers.Load() > 0 {
+			violation.Store(true)
+		}
+		tide.Sleep(200us)
+		readers.Add(-1)
+		rw.RUnlock()
+	}
+}
+
+fn rwWriter() ! {
+	for i in 0..20 {
+		try rw.Lock()
+		writers.Add(1)
+		if readers.Load() > 0 {
+			violation.Store(true)
+		}
+		tide.Sleep(200us)
+		writers.Add(-1)
+		rw.Unlock()
+	}
+}
+
+fn rwRun() ! {
+	scope s {
+		s.spawn(fn() ! {
+			try rwReader()
+		})
+		s.spawn(fn() ! {
+			try rwReader()
+		})
+		s.spawn(fn() ! {
+			try rwWriter()
+		})
+	}
+}
+
+fn rwWork(core i64) {
+	rwRun() catch _ {
+		violation.Store(true)
+	}
+}
+
+// work is one core of the whole cross-core load: the atomic hammer, then the reader/writer phase,
+// then (core 0 and core 1 only) a wait on slot 7 woken by core 0. hearth.Run starts a program's
+// cores once, so every cross-core phase is in this one entry.
+fn work(core i64) {
+	hammer(core)
+	rwWork(core)
+	if core == 0 {
+		tide.Sleep(20ms)
+		atomic.StoreAt(slots, 7, 1)
+		atomic.WakeAt(slots, 7, 4)
+	} else if core == 1 {
+		if atomic.WaitAt(slots, 7, 0, 1000000000) == 0 {
+			waited.Store(1)
+		}
+	}
+}
+
+fn taskRun() ! {
+	scope s {
+		for i in 0..8 {
+			s.spawn(fn() ! {
+				try holder()
+			})
+		}
+	}
+}
+
+fn taskLoad() {
+	taskRun() catch _ {
+		maxInside.Store(-1)
+	}
+}
+
+fn main() {
+	// One core: the operations themselves.
+	say.Line("add/fetch-add/load:", atomic.AddAt(slots, 0, 5), atomic.FetchAddAt(slots, 0, 3), atomic.LoadAt(slots, 0))
+	say.Line("cas/swap:", atomic.CASAt(slots, 0, 8, 20), atomic.SwapAt(slots, 0, 1))
+	atomic.StoreAt(slots, 0, 4)
+	say.Line("store/load:", atomic.LoadAt(slots, 0))
+	say.Line("counter:", perCore[0].Add(2), perCore[0].FetchAdd(1), perCore[0].Load(), perCore[0].CompareSwap(3, 9), perCore[0].Swap(0))
+	say.Line("wait sees a changed value:", atomic.WaitAt(slots, 0, 999, 1000000) == 0)
+	say.Line("mutex try/try:", mu.TryLock(), mu.TryLock())
+	mu.Unlock()
+	say.Line("rwmutex try:", rw.TryRLock(), rw.TryLock(), rw.TryRLock())
+	rw.RUnlock()
+	rw.RUnlock()
+	say.Line("rwmutex write:", rw.TryLock())
+	rw.Unlock()
+
+	// Clear the slot the single-core section changed, so the cross-core total is the load alone.
+	atomic.StoreAt(slots, 0, 0)
+
+	// One core, eight tasks, each holding the mutex across a wait.
+	taskLoad()
+	say.Line("mutex: max holders at once:", maxInside.Load())
+
+	// Four cores: the exact totals from the shared slots, the shared counter and each core's own
+	// cache-line counter, no reader ever inside with a writer, and the wait woken by another core.
+	hearth.Run(4, work)
+	mut slotTotal = 0
+	for i in 0..4 {
+		slotTotal += slots[i]
+	}
+	mut coreTotal = 0
+	for i in 0..4 {
+		coreTotal += perCore[i].Load()
+	}
+	say.Line("slots total:", slotTotal, "counter:", counter.Load(), "per-core total:", coreTotal)
+	say.Line("rw violation:", violation.Load())
+	say.Line("rw settled:", readers.Load() == 0 && writers.Load() == 0)
+	say.Line("futex wait/wake:", waited.Load() == 1)
+}

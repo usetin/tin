@@ -1,0 +1,129 @@
+package atomic
+
+// Indivisible operations beyond the counters of atomic.tin: fetch-and-add, compare-and-swap and
+// the rest on a slot of a shared []i64 (a table of counters or latches every core changes), a
+// counter on its own cache line, and the acquire/release pair. As in atomic.tin, a value these
+// operate on must be in a `shared let` (one copy every core reads) or in memory one core owns and
+// hands to another; a per-core value must not be shared.
+
+// FetchAdd adds n and returns the value before the addition (fetch-and-add; Add returns the value
+// after it). On an LSE CPU the plain form is used here: FetchAdd is for a hot slot where the
+// caller needs the previous value, as a ticket lock does.
+fn (c Int) FetchAdd(n i64) i64 {
+	return __atomic_add(cast(i64, c), n)
+}
+
+// LoadAcquire reads the value with acquire order: every load and store after it sees the stores
+// that happened before the matching release store. The compiler has one load builtin, which is
+// sequentially consistent (stronger than acquire), so this is that load; on arm64 it is an ldar.
+fn (c Int) LoadAcquire() i64 {
+	return __atomic_load(cast(i64, c))
+}
+
+// StoreRelease writes the value with release order: every store before it is visible to a task that
+// sees this store with LoadAcquire. The compiler's store builtin is sequentially consistent
+// (stronger than release); on arm64 it is an stlr.
+fn (c Int) StoreRelease(v i64) {
+	__atomic_store(cast(i64, c), v)
+}
+
+// LoadAt reads the slot i of a shared []i64 (or any []i64 whose memory is shared) indivisibly. The
+// slice's data pointer is read once, so the slot's address is stable; i must be in range.
+fn LoadAt(xs []i64, i i64) i64 {
+	return __atomic_load(slotAddr(xs, i))
+}
+
+// StoreAt writes v to slot i indivisibly.
+fn StoreAt(xs []i64, i i64, v i64) {
+	__atomic_store(slotAddr(xs, i), v)
+}
+
+// AddAt adds n to slot i and returns the value after the addition (Go's AddInt64).
+fn AddAt(xs []i64, i i64, n i64) i64 {
+	return __atomic_add(slotAddr(xs, i), n) + n
+}
+
+// FetchAddAt adds n to slot i and returns the value before the addition.
+fn FetchAddAt(xs []i64, i i64, n i64) i64 {
+	return __atomic_add(slotAddr(xs, i), n)
+}
+
+// SwapAt sets slot i to v and returns the value it replaced.
+fn SwapAt(xs []i64, i i64, v i64) i64 {
+	return __atomic_swap(slotAddr(xs, i), v)
+}
+
+// CASAt sets slot i to next if it is old, and reports whether it did (compare-and-swap). Retry on
+// the value a caller reloads with LoadAt.
+fn CASAt(xs []i64, i i64, old i64, next i64) bool {
+	return __atomic_cas(slotAddr(xs, i), old, next) == old
+}
+
+// slotAddr is the address of slot i: the slice's data pointer plus i words. An index out of range
+// panics, as a bounds check does, instead of writing another value's memory.
+fn slotAddr(xs []i64, i i64) i64 {
+	if i < 0 || i >= len(xs) {
+		panic("atomic: slot index out of range")
+	}
+	return cast(i64, xs)[2] + i*8
+}
+
+// Counter is an i64 counter whose block is padded to its own cache line, so counters a core each
+// owns do not share a line with another core's (false sharing): a per-core counter array stays fast
+// under load. NewCounter makes one. It is a reference like Int, so it goes in a `shared let` or in
+// memory a core owns.
+type Counter struct {
+	v i64
+}
+
+// NewCounter returns a zero counter padded to its own cache line. The counter takes a 240-byte
+// block, whose size class is 256 bytes, so two counters are at least 256 bytes apart and never
+// share a 128-byte line (Apple silicon) or a 64-byte one (x86-64).
+fn NewCounter() Counter {
+	return cast(Counter, rt_ingot_alloc(240))
+}
+
+// Load returns the counter's value.
+fn (c Counter) Load() i64 {
+	return __atomic_load(cast(i64, c))
+}
+
+// Store sets the counter's value.
+fn (c Counter) Store(v i64) {
+	__atomic_store(cast(i64, c), v)
+}
+
+// Add adds n and returns the value after the addition.
+fn (c Counter) Add(n i64) i64 {
+	return __atomic_add(cast(i64, c), n) + n
+}
+
+// FetchAdd adds n and returns the value before the addition.
+fn (c Counter) FetchAdd(n i64) i64 {
+	return __atomic_add(cast(i64, c), n)
+}
+
+// Swap sets the value to v and returns the one it replaced.
+fn (c Counter) Swap(v i64) i64 {
+	return __atomic_swap(cast(i64, c), v)
+}
+
+// CompareSwap sets the value to next if it is old, and reports whether it did.
+fn (c Counter) CompareSwap(old i64, next i64) bool {
+	return __atomic_cas(cast(i64, c), old, next) == old
+}
+
+// WaitAt blocks the calling thread while slot i still holds val (the Linux futex wait), so another
+// core's WakeAt on the same slot ends it; it returns 0 when woken, or an errno. It blocks the
+// thread it runs on, so it is for a helper thread or a plain program, never for a task: a task
+// waiting on a shared word uses latch (which parks and lets the core serve others). On macOS there
+// is no futex: WaitAt rechecks the slot after a short sleep until it changes.
+fn WaitAt(xs []i64, i i64, val i64, timeoutNs i64) i64 {
+	return sysWait(slotAddr(xs, i), val, timeoutNs)
+}
+
+// WakeAt wakes up to n threads blocked in WaitAt on slot i (the Linux futex wake) and returns how
+// many it woke. A task blocked in latch is not woken by it.
+fn WakeAt(xs []i64, i i64, n i64) i64 {
+	return sysWake(slotAddr(xs, i), n)
+}

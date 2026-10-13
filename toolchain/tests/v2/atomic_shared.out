@@ -1,0 +1,13 @@
+add/fetch-add/load: 5 5 8
+cas/swap: true 20
+store/load: 4
+counter: 2 2 3 true 9
+wait sees a changed value: true
+mutex try/try: true false
+rwmutex try: true false true
+rwmutex write: true
+mutex: max holders at once: 1
+slots total: 100000 counter: 100000 per-core total: 100000
+rw violation: false
+rw settled: true
+futex wait/wake: true

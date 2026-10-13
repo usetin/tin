@@ -1,0 +1,59 @@
+package atomic
+
+// Linux side of atomic_more.tin: the futex wait and wake system calls (number in
+// atomic_linux_<cpu>.tin). FUTEX_WAIT is 0 and FUTEX_WAKE is 1.
+
+const futexWaitOp = 0
+const futexWakeOp = 1
+
+// sysWait waits while *p == val, up to timeoutNs (0 waits without a limit), and returns 0, an
+// errno, or EAGAIN when *p already differs (the caller retries).
+fn sysWait(p i64, val i64, timeoutNs i64) i64 {
+	mut ts = 0
+	if timeoutNs > 0 {
+		ts = calloc(2, 8)
+		ts[0] = timeoutNs / 1000000000
+		ts[1] = timeoutNs % 1000000000
+	}
+	for {
+		let r = linux_raw(nrFutex, p, futexWaitOp, val, ts, 0, 0)
+		if r >= 0 {
+			if ts != 0 {
+				free(ts)
+			}
+			return 0
+		}
+		if r < -4095 {
+			if ts != 0 {
+				free(ts)
+			}
+			return 0
+		}
+		let e = 0 - r
+		// EAGAIN: the value already differs, so there was nothing to wait for.
+		if e == EAGAIN {
+			if ts != 0 {
+				free(ts)
+			}
+			return 0
+		}
+		// A signal interrupted the wait: wait again.
+		if e == EINTR {
+			continue
+		}
+		if ts != 0 {
+			free(ts)
+		}
+		return e
+	}
+	return 0
+}
+
+// sysWake wakes up to n threads waiting on *p and returns how many it woke.
+fn sysWake(p i64, n i64) i64 {
+	let r = linux_raw(nrFutex, p, futexWakeOp, n, 0, 0, 0)
+	if r < 0 && r >= -4095 {
+		return 0
+	}
+	return r
+}
