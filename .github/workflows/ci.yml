@@ -63,7 +63,11 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: usetin/docs
-          ref: 13a457300584e9d877ad27145ee36d6a595f9b8a
+<<<<<<< HEAD
+          ref: c36fb7627d41e7f8e27e8c3f55b8ea46ddadaeb0
+=======
+          ref: c36fb7627d41e7f8e27e8c3f55b8ea46ddadaeb0
+>>>>>>> 1808674d (quarry: pin usetin/docs for the WriteAt and DataSync entries (#1297))
           path: .docs
           persist-credentials: false
       - name: Link the documentation into the tree
