@@ -1,0 +1,15 @@
+package hearth
+
+// Linux side of hearth.tin: thread affinity with sched_setaffinity. The mask is 128 bytes (1024
+// CPUs); the call takes the number of bytes.
+
+fn sysPin(cpu i64) bool {
+	if cpu < 0 || cpu >= 1024 {
+		return false
+	}
+	let set = calloc(128, 8)
+	store8(set + cpu/8, 1 << (cpu % 8))
+	let r = rt_sys_sched_setaffinity(0, 128, set)
+	free(set)
+	return r == 0
+}

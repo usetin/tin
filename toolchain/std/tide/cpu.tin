@@ -1,0 +1,17 @@
+package tide
+
+// CPU clocks for per-statement cost: how much processor time this thread or the whole process has
+// used, in nanoseconds. A statement's CPU cost is CPUTime() after it minus CPUTime() before it;
+// Now() measures wall time, which includes the waits. Both are Linux and macOS clocks; macOS
+// measures the same things.
+
+// CPUTime is the CPU time this thread has used, in nanoseconds (CLOCK_THREAD_CPUTIME_ID).
+fn CPUTime() i64 {
+	return sysCPUClock(1)
+}
+
+// ProcessCPUTime is the CPU time the whole process (every thread) has used, in nanoseconds
+// (CLOCK_PROCESS_CPUTIME_ID).
+fn ProcessCPUTime() i64 {
+	return sysCPUClock(0)
+}

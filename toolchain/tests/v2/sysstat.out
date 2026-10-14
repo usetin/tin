@@ -1,0 +1,5 @@
+thread cpu grew with work: true true
+process cpu nondecreasing: true true
+pin a negative cpu: false
+pin an out-of-range cpu: false
+pin: ok
