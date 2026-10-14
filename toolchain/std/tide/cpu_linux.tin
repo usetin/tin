@@ -1,0 +1,17 @@
+package tide
+
+// Linux side of cpu.tin: CLOCK_PROCESS_CPUTIME_ID is 2 and CLOCK_THREAD_CPUTIME_ID is 3; the
+// runtime's clock_gettime leaf falls back to the system call for them (the vDSO has only the
+// wall and monotonic clocks).
+
+fn sysCPUClock(which i64) i64 {
+	mut id = 2
+	if which != 0 {
+		id = 3
+	}
+	let ts = calloc(2, 8)
+	rt_sys_clock_gettime(id, ts)
+	let ns = ts[0] * 1000000000 + ts[1]
+	free(ts)
+	return ns
+}

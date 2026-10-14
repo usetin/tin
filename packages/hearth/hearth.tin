@@ -24,6 +24,16 @@ fn ID() i64 {
 	return rt_core_id()
 }
 
+// Pin binds the calling thread (a core) to CPU cpu, so its work stops migrating between CPUs and a
+// page cache or a WAL stays warm on one core (sched_setaffinity on Linux). It reports whether the
+// CPU was accepted: a negative or unknown CPU is false, and so is a CPU the container's cpuset
+// excludes. macOS has no thread affinity, so there it does nothing and reports true. Pinning is a
+// hint the scheduler may still move a thread for load balancing; a task shares its core's thread,
+// so this pins a core, not a task.
+fn Pin(cpu i64) bool {
+	return sysPin(cpu)
+}
+
 // coresStarted is set once Run has started cores (on the core that called it).
 mut coresStarted = false
 

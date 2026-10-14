@@ -1,0 +1,21 @@
+package tide
+
+// macOS side of cpu.tin: CLOCK_PROCESS_CPUTIME_ID is 12 and CLOCK_THREAD_CPUTIME_ID is 16.
+
+extern fn clock_gettime(clk i64, ts i64) i64
+
+fn sysCPUClock(which i64) i64 {
+	mut id = 12
+	if which != 0 {
+		id = 16
+	}
+	let ts = calloc(2, 8)
+	let r = i64(i32(clock_gettime(id, ts)))
+	if r != 0 {
+		free(ts)
+		return 0
+	}
+	let ns = ts[0] * 1000000000 + ts[1]
+	free(ts)
+	return ns
+}

@@ -1,0 +1,11 @@
+package hearth
+
+// macOS side of hearth.tin: macOS has no thread-to-CPU affinity (Mach's affinity hints do not bind
+// a thread to a CPU), so Pin does nothing and reports true, so portable code can call it.
+
+fn sysPin(cpu i64) bool {
+	if cpu < 0 || cpu >= 1024 {
+		return false
+	}
+	return true
+}

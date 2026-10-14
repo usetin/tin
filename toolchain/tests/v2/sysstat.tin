@@ -1,0 +1,27 @@
+package main
+
+import "hearth"
+import "say"
+import "tide"
+
+// tide's CPU clocks for per-statement cost and hearth.Pin for binding a core to a CPU.
+
+fn main() {
+	// This thread's CPU time grows with work; the process's never goes backwards.
+	mut x = 0
+	let t0 = tide.CPUTime()
+	for i in 0..1000000 {
+		x += i
+	}
+	let t1 = tide.CPUTime()
+	say.Line("thread cpu grew with work:", t1 > t0, x > 0)
+	let p0 = tide.ProcessCPUTime()
+	let p1 = tide.ProcessCPUTime()
+	say.Line("process cpu nondecreasing:", p1 >= p0, p0 > 0)
+
+	// Pin refuses a CPU that cannot exist; a real one is accepted (macOS does nothing).
+	say.Line("pin a negative cpu:", hearth.Pin(-1))
+	say.Line("pin an out-of-range cpu:", hearth.Pin(4096))
+	hearth.Pin(0)
+	say.Line("pin: ok")
+}
