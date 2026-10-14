@@ -21,6 +21,7 @@ fn main() ! {
 }
 
 fn signalCallback() {
+	tide.Sleep(1ms)
 	say.Line("signal callback on core task")
 	anvil.Drain(0)
 }
