@@ -1,0 +1,31 @@
+package atomic
+
+// macOS side of atomic_more.tin: there is no futex, so WaitAt rechecks the slot after a short sleep
+// (a spin with backoff) until it changes or the timeout passes; WakeAt does nothing, since a
+// spinning waiter sees the new value on its next check.
+
+// sysWait waits while *p == val: it rechecks after a short sleep, up to timeoutNs (0: until the
+// value changes). It returns 0 when the value changed or the timeout passed.
+fn sysWait(p i64, val i64, timeoutNs i64) i64 {
+	mut left = timeoutNs
+	if left == 0 {
+		left = 1 << 60
+	}
+	for left > 0 {
+		if __atomic_load(p) != val {
+			return 0
+		}
+		mut nap = 50000
+		if left < nap {
+			nap = left
+		}
+		rt_sleep_ns(nap)
+		left -= nap
+	}
+	return 0
+}
+
+// sysWake does nothing on macOS: a waiter is spinning and sees the new value itself.
+fn sysWake(p i64, n i64) i64 {
+	return 0
+}

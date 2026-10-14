@@ -1,0 +1,5 @@
+package atomic
+
+// System call number of futex on x86-64 Linux.
+
+const nrFutex = 202

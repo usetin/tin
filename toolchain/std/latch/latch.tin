@@ -1,0 +1,170 @@
+// Package latch has the locks a database takes for a short critical section (a page latch, a
+// buffer header): an exclusive Mutex and a reader/writer RWMutex. Both spin briefly, then park the
+// waiting task with a short timeout, so a core waiting on a latch keeps serving its other tasks and
+// a task's deadline or cancellation still ends the wait with its fault. A latch is a reference (a
+// pointer to one word), so one goes in a `shared let` and every core locks it; a latch in per-core
+// memory is that core's own and must not be shared. Hold a latch for a short section and never
+// across a wait that could be long: the holder is what other cores' tasks wait for.
+package latch
+
+import "fault"
+
+// spinLimit is how many times Lock tries before it parks; a short uncontended section is taken
+// without touching the scheduler.
+const spinLimit = 64
+
+// parkNs is how long a parked waiter sleeps before it looks again (20 microseconds). A woken latch
+// is seen within about that long; the alternative, a waiter that spins, would hold a core.
+const parkNs = 20000
+
+// Mutex is an exclusive latch: one holder at a time.
+type Mutex struct {
+	state i64
+}
+
+// New returns a free Mutex.
+fn New() Mutex {
+	return Mutex{state: 0}
+}
+
+// TryLock takes the latch if it is free and reports whether it did, without waiting.
+fn (m Mutex) TryLock() bool {
+	return __atomic_cas(cast(i64, m), 0, 1) == 0
+}
+
+// Lock takes the latch, waiting until it is free. The wait parks the task (the core serves others)
+// and ends with the task's deadline or cancellation as a fault.
+fn (m Mutex) Lock() ! {
+	if m.TryLock() {
+		return
+	}
+	for i in 0..spinLimit {
+		if m.TryLock() {
+			return
+		}
+	}
+	for {
+		if m.TryLock() {
+			return
+		}
+		if rt_task_park(parkNs) == waitDeadline {
+			fail cast(fault, rt_wait_fault())
+		}
+	}
+}
+
+// Unlock releases the latch; it must be held.
+fn (m Mutex) Unlock() {
+	__atomic_store(cast(i64, m), 0)
+}
+
+// RWMutex is a reader/writer latch: many readers or one writer. A waiting writer blocks new
+// readers, so writers do not starve under a read-heavy load.
+type RWMutex struct {
+	state i64
+}
+
+// One state word: bit 0 is the writer, bit 1 a waiting writer, and the bits above count readers.
+const rwWriter = 1
+const rwWaiting = 2
+const rwReader = 4
+
+// NewRWMutex returns a free RWMutex.
+fn NewRWMutex() RWMutex {
+	return RWMutex{state: 0}
+}
+
+// TryRLock takes a read lock if no writer holds or waits, and reports whether it did.
+fn (m RWMutex) TryRLock() bool {
+	let w = cast(i64, m)
+	for {
+		let s = __atomic_load(w)
+		if s&(rwWriter|rwWaiting) != 0 {
+			return false
+		}
+		if __atomic_cas(w, s, s+rwReader) == s {
+			return true
+		}
+	}
+}
+
+// RLock takes a read lock, waiting while a writer holds or waits for the latch. The wait parks the
+// task like Lock's.
+fn (m RWMutex) RLock() ! {
+	if m.TryRLock() {
+		return
+	}
+	for i in 0..spinLimit {
+		if m.TryRLock() {
+			return
+		}
+	}
+	for {
+		if m.TryRLock() {
+			return
+		}
+		if rt_task_park(parkNs) == waitDeadline {
+			fail cast(fault, rt_wait_fault())
+		}
+	}
+}
+
+// RUnlock releases a read lock.
+fn (m RWMutex) RUnlock() {
+	__atomic_add(cast(i64, m), 0-rwReader)
+}
+
+// TryLock takes the write lock if no reader and no writer holds it, and reports whether it did.
+fn (m RWMutex) TryLock() bool {
+	return __atomic_cas(cast(i64, m), 0, rwWriter) == 0
+}
+
+// Lock takes the write lock: it marks a writer as waiting (so new readers wait), waits for the
+// readers to drain, then holds the latch. The wait parks the task like Lock's.
+fn (m RWMutex) Lock() ! {
+	let w = cast(i64, m)
+	if m.TryLock() {
+		return
+	}
+	// Announce the waiting writer once, so readers that arrive now queue behind it.
+	for {
+		let s = __atomic_load(w)
+		if s&rwWriter != 0 {
+			break
+		}
+		if s&rwWaiting == 0 {
+			if __atomic_cas(w, s, s|rwWaiting) == s {
+				break
+			}
+			continue
+		}
+		break
+	}
+	// Wait for the readers (and any other writer) to drain, then take the writer bit.
+	for {
+		if m.TryLock() {
+			return
+		}
+		let s = __atomic_load(w)
+		if s == rwWaiting && __atomic_cas(w, rwWaiting, rwWriter) == rwWaiting {
+			return
+		}
+		if rt_task_park(parkNs) == waitDeadline {
+			fail cast(fault, rt_wait_fault())
+		}
+	}
+}
+
+// Unlock releases the write lock, leaving a waiting writer's mark in place. It must be held.
+fn (m RWMutex) Unlock() {
+	let w = cast(i64, m)
+	for {
+		let s = __atomic_load(w)
+		if s&rwWriter == 0 {
+			return
+		}
+		if __atomic_cas(w, s, s&(rwWriter^-1)) == s {
+			return
+		}
+	}
+}
